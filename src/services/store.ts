@@ -76,9 +76,11 @@ export function getInitialState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      const cleanProperties = (parsed.properties || []).filter((p: any) => p.ownerId !== 'owner-rajesh-01' && p.ownerId !== 'owner-default');
       return {
         ...defaultInitial,
-        ...parsed
+        ...parsed,
+        properties: cleanProperties
       };
     }
   } catch (e) {
@@ -241,76 +243,251 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
   }
 }
 
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export async function syncPropertyToSupabase(
   prop: Property,
   rooms: Room[],
   beds: Bed[]
-) {
-  if (!supabase) return;
+): Promise<boolean> {
+  if (!supabase) return false;
   try {
-    await supabase.from('properties').insert({
+    const { error: propErr } = await supabase.from('properties').insert({
       id: prop.id,
+      owner_id: prop.ownerId || null,
       name: prop.name,
       type: prop.type,
       city: prop.city,
       area: prop.area,
+      address: prop.address || prop.area,
+      landmark: prop.landmark || '',
       distance_km: 1.0,
       commute_minutes: 5,
       rating: 5.0,
       review_count: 0,
       verified: true,
       verification_level: 'Gold',
-      rent: prop.baseRent,
-      deposit: prop.deposit,
-      brokerage: prop.brokerage,
-      electricity: prop.electricityType === 'included' ? 'Included' : `₹${prop.electricityRate}/unit`,
+      rent: Number(prop.baseRent) || 0,
+      deposit: Number(prop.deposit) || 0,
+      brokerage: Number(prop.brokerage) || 0,
+      electricity: Number(prop.electricityRate) || 0,
       electricity_type: prop.electricityType,
-      electricity_rate: prop.electricityRate,
-      wifi_cost: prop.wifiCost,
-      maintenance: prop.maintenance,
-      food_cost: prop.foodCost,
-      food_available: prop.foodAvailable,
-      food_included: prop.foodIncluded,
+      electricity_rate: Number(prop.electricityRate) || 0,
+      wifi_cost: Number(prop.wifiCost) || 0,
+      maintenance: Number(prop.maintenance) || 0,
+      food_cost: Number(prop.foodCost) || 0,
+      food_available: Boolean(prop.foodAvailable),
+      food_included: Boolean(prop.foodIncluded),
       wifi: prop.amenities.includes('WiFi') || prop.amenities.includes('High Speed WiFi'),
       electricity_included: prop.electricityType === 'included',
-      available_beds: prop.availableBeds,
-      total_beds: prop.totalBeds,
+      available_beds: Number(prop.availableBeds) || 0,
+      total_beds: Number(prop.totalBeds) || 0,
       accommodation: `${rooms[0]?.roomType || '2 Sharing'} Rooms`,
-      amenities: prop.amenities,
-      image: prop.image,
+      amenities: prop.amenities || [],
+      image: prop.image || '',
       color: '#176b58',
-      description: `${prop.name} located in ${prop.area}, ${prop.city}. ${prop.landmark}`,
-      owner_name: 'RoomSaathi Landlord',
-      rules: prop.rules,
+      description: `${prop.name} located in ${prop.area}, ${prop.city}. ${prop.landmark || ''}`,
+      owner_name: prop.name || 'RoomSaathi Landlord',
+      rules: prop.rules || [],
       updated_label: 'Just now',
       is_active: true
     });
 
+    if (propErr) {
+      console.error('Error inserting property to Supabase:', propErr);
+      return false;
+    }
+
     if (rooms.length > 0) {
-      await supabase.from('rooms').insert(rooms.map(r => ({
+      const { error: roomsErr } = await supabase.from('rooms').insert(rooms.map(r => ({
         id: r.id,
         property_id: prop.id,
         room_number: r.roomNumber,
         accommodation: r.roomType,
-        rent: r.baseRent,
-        floor: r.floor,
-        total_beds: r.totalBeds
+        rent: Number(r.baseRent) || 0,
+        floor: Number(r.floor) || 1,
+        total_beds: Number(r.totalBeds) || 2
       })));
+      if (roomsErr) console.error('Error inserting rooms:', roomsErr);
     }
 
     if (beds.length > 0) {
-      await supabase.from('beds').insert(beds.map(b => ({
+      const { error: bedsErr } = await supabase.from('beds').insert(beds.map(b => ({
         id: b.id,
         room_id: b.roomId,
         property_id: prop.id,
         bed_label: b.bedLabel,
         status: b.status,
-        tenant_id: b.tenantId || null,
+        tenant_id: null,
         tenant_name: b.tenantName || null
       })));
+      if (bedsErr) console.error('Error inserting beds:', bedsErr);
     }
+
+    return true;
   } catch (err) {
     console.error('Failed to sync new property to Supabase', err);
+    return false;
+  }
+}
+
+export async function syncRoomToSupabase(room: Room, beds: Bed[]) {
+  if (!supabase) return;
+  try {
+    await supabase.from('rooms').insert({
+      id: room.id,
+      property_id: room.propertyId,
+      room_number: room.roomNumber,
+      accommodation: room.roomType,
+      rent: Number(room.baseRent) || 0,
+      floor: Number(room.floor) || 1,
+      total_beds: Number(room.totalBeds) || 2
+    });
+
+    if (beds.length > 0) {
+      await supabase.from('beds').insert(beds.map(b => ({
+        id: b.id,
+        room_id: room.id,
+        property_id: room.propertyId,
+        bed_label: b.bedLabel,
+        status: b.status,
+        tenant_id: null,
+        tenant_name: null
+      })));
+    }
+  } catch (e) {
+    console.error('Failed to sync room to Supabase', e);
+  }
+}
+
+export async function syncTenantToSupabase(tenant: Tenant, rentRecord?: RentRecord) {
+  if (!supabase) return;
+  try {
+    await supabase.from('tenants').insert({
+      id: tenant.id,
+      property_id: tenant.propertyId,
+      room_id: tenant.roomId || null,
+      bed_id: tenant.bedId || null,
+      profile_id: null,
+      room_number: tenant.roomNumber,
+      bed_label: tenant.bedLabel || null,
+      full_name: tenant.fullName,
+      phone: tenant.phone,
+      emergency_phone: tenant.emergencyPhone || null,
+      email: tenant.email || null,
+      college_or_work: tenant.collegeOrWork || null,
+      id_proof_type: tenant.idProofType || 'Aadhaar',
+      id_proof_number: tenant.idProofNumber || null,
+      check_in_date: tenant.checkInDate,
+      monthly_rent: Number(tenant.monthlyRent) || 0,
+      deposit_paid: Number(tenant.depositPaid) || 0,
+      status: tenant.status || 'active',
+      police_verification_status: tenant.policeVerificationStatus || 'pending'
+    });
+
+    if (tenant.bedId) {
+      await supabase.from('beds').update({
+        status: 'occupied',
+        tenant_name: tenant.fullName
+      }).eq('id', tenant.bedId);
+    }
+
+    if (rentRecord) {
+      await supabase.from('rent_records').insert({
+        id: rentRecord.id,
+        tenant_id: tenant.id,
+        tenant_name: rentRecord.tenantName,
+        property_id: rentRecord.propertyId,
+        property_name: rentRecord.propertyName,
+        room_number: rentRecord.roomNumber,
+        month: rentRecord.month,
+        base_rent: Number(rentRecord.baseRent) || 0,
+        wifi_amount: Number(rentRecord.wifiAmount) || 0,
+        food_amount: Number(rentRecord.foodAmount) || 0,
+        other_amount: Number(rentRecord.otherAmount) || 0,
+        total_amount: Number(rentRecord.totalAmount) || 0,
+        status: rentRecord.status,
+        due_date: rentRecord.dueDate || null
+      });
+    }
+  } catch (e) {
+    console.error('Failed to sync tenant to Supabase', e);
+  }
+}
+
+export async function syncVacateTenantToSupabase(tenantId: string, bedId?: string) {
+  if (!supabase) return;
+  try {
+    await supabase.from('tenants').update({ status: 'vacated' }).eq('id', tenantId);
+    if (bedId) {
+      await supabase.from('beds').update({
+        status: 'available',
+        tenant_id: null,
+        tenant_name: null
+      }).eq('id', bedId);
+    }
+  } catch (e) {
+    console.error('Failed to sync vacate to Supabase', e);
+  }
+}
+
+export async function syncRentRecordToSupabase(record: RentRecord) {
+  if (!supabase) return;
+  try {
+    await supabase.from('rent_records').insert({
+      id: record.id,
+      tenant_id: record.tenantId || null,
+      tenant_name: record.tenantName,
+      property_id: record.propertyId,
+      property_name: record.propertyName,
+      room_number: record.roomNumber,
+      month: record.month,
+      base_rent: Number(record.baseRent) || 0,
+      prev_reading: record.prevReading != null ? Number(record.prevReading) : null,
+      current_reading: record.currentReading != null ? Number(record.currentReading) : null,
+      electricity_units: record.electricityUnits != null ? Number(record.electricityUnits) : null,
+      electricity_amount: record.electricityAmount != null ? Number(record.electricityAmount) : null,
+      wifi_amount: Number(record.wifiAmount) || 0,
+      food_amount: Number(record.foodAmount) || 0,
+      other_amount: Number(record.otherAmount) || 0,
+      total_amount: Number(record.totalAmount) || 0,
+      status: record.status,
+      due_date: record.dueDate || null,
+      paid_date: record.paidDate || null,
+      payment_method: record.paymentMethod || null,
+      transaction_ref: record.transactionRef || null
+    });
+  } catch (e) {
+    console.error('Failed to sync rent record to Supabase', e);
+  }
+}
+
+export async function syncRentStatusToSupabase(
+  recordId: string,
+  status: string,
+  method?: string,
+  ref?: string,
+  paidDate?: string
+) {
+  if (!supabase) return;
+  try {
+    await supabase.from('rent_records').update({
+      status,
+      payment_method: method || null,
+      transaction_ref: ref || null,
+      paid_date: paidDate || null
+    }).eq('id', recordId);
+  } catch (e) {
+    console.error('Failed to update rent status in Supabase', e);
   }
 }
 
@@ -363,6 +540,19 @@ export async function syncComplaintToSupabase(comp: Omit<Complaint, 'id' | 'crea
     });
   } catch (e) {
     console.error('Failed to sync complaint to Supabase', e);
+  }
+}
+
+export async function syncComplaintStatusToSupabase(complaintId: string, status: string, adminNote?: string) {
+  if (!supabase) return;
+  try {
+    await supabase.from('complaints').update({
+      status,
+      admin_note: adminNote || '',
+      resolved_at: status === 'resolved' ? new Date().toISOString() : null
+    }).eq('id', complaintId);
+  } catch (e) {
+    console.error('Failed to update complaint in Supabase', e);
   }
 }
 

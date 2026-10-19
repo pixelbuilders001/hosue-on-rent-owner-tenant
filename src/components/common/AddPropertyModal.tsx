@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { Property } from '../../types';
-import { X, Building2, Plus, IndianRupee } from 'lucide-react';
+import { X, Building2, Plus, IndianRupee, Lock } from 'lucide-react';
 
 interface AddPropertyModalProps {
   onClose: () => void;
   onAddProperty: (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => void;
+  isAuthenticated: boolean;
+  currentUserId: string;
+  ownerName?: string;
+  onRequireAuth?: () => void;
 }
 
 export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   onClose,
-  onAddProperty
+  onAddProperty,
+  isAuthenticated,
+  currentUserId,
+  ownerName,
+  onRequireAuth
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<Property['type']>('PG');
@@ -26,10 +34,14 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated || !currentUserId) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
     if (!name || !address) return;
 
     onAddProperty({
-      ownerId: 'owner-rajesh-01',
+      ownerId: currentUserId,
       name,
       type,
       address,
@@ -69,6 +81,25 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             <X size={18} />
           </button>
         </div>
+
+        {!isAuthenticated && (
+          <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-amber-900 text-xs flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <Lock size={15} className="text-amber-700 shrink-0" />
+              <span>Sign in required to publish your property listing.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (onRequireAuth) onRequireAuth();
+              }}
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0"
+            >
+              Sign In
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4 text-xs">
           <div>
@@ -196,9 +227,14 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+              disabled={!isAuthenticated}
+              className={`px-4 py-2 font-semibold text-white rounded-xl shadow-xs transition ${
+                !isAuthenticated 
+                  ? 'bg-slate-400 cursor-not-allowed opacity-70' 
+                  : 'bg-emerald-700 hover:bg-emerald-800'
+              }`}
             >
-              Create Property
+              {isAuthenticated ? 'Create Property' : 'Sign In Required'}
             </button>
           </div>
         </form>

@@ -15,7 +15,7 @@ import { TenantExploreView } from './components/tenant/TenantExploreView';
 import { TenantRoomDetailModal } from './components/tenant/TenantRoomDetailModal';
 import { TenantMyStayView } from './components/tenant/TenantMyStayView';
 import { TenantInquiriesView } from './components/tenant/TenantInquiriesView';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Plus, Lock } from 'lucide-react';
 import { 
   getInitialState, 
   saveState, 
@@ -24,7 +24,14 @@ import {
   syncBedStatusToSupabase,
   syncLeadToSupabase,
   syncComplaintToSupabase,
-  syncPropertyToSupabase
+  syncPropertyToSupabase,
+  syncRoomToSupabase,
+  syncTenantToSupabase,
+  syncVacateTenantToSupabase,
+  syncRentRecordToSupabase,
+  syncRentStatusToSupabase,
+  syncComplaintStatusToSupabase,
+  generateUUID
 } from './services/store';
 import { supabase } from './services/supabase';
 import { 
@@ -48,6 +55,7 @@ export function App() {
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userEmail, setUserEmail] = useState('');
 
   // Modals state
@@ -67,10 +75,13 @@ export function App() {
       if (liveData) {
         setState(prev => ({
           ...prev,
-          properties: liveData.properties && liveData.properties.length > 0 ? liveData.properties : prev.properties,
-          rooms: liveData.rooms && liveData.rooms.length > 0 ? liveData.rooms : prev.rooms,
-          beds: liveData.beds && liveData.beds.length > 0 ? liveData.beds : prev.beds,
-          leads: liveData.leads && liveData.leads.length > 0 ? liveData.leads : prev.leads
+          properties: liveData.properties || [],
+          rooms: liveData.rooms || [],
+          beds: liveData.beds || [],
+          leads: liveData.leads || [],
+          tenants: liveData.tenants || [],
+          rentRecords: liveData.rentRecords || [],
+          complaints: liveData.complaints || []
         }));
       }
     });
@@ -79,6 +90,7 @@ export function App() {
     if (client) {
       const syncUserProfile = async (user: any) => {
         setIsAuthenticated(true);
+        setCurrentUserId(user.id);
         setUserEmail(user.email || '');
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -131,6 +143,7 @@ export function App() {
           syncUserProfile(session.user);
         } else {
           setIsAuthenticated(false);
+          setCurrentUserId('');
           setUserEmail('');
         }
       });
@@ -140,6 +153,7 @@ export function App() {
           syncUserProfile(session.user);
         } else {
           setIsAuthenticated(false);
+          setCurrentUserId('');
           setUserEmail('');
         }
       });
@@ -150,7 +164,21 @@ export function App() {
     }
   }, []);
 
-  const activeProperty = state.properties.find(p => p.id === state.activePropertyId) || state.properties[0];
+  // Filter properties based on role and authentication
+  const displayProperties = state.currentRole === 'owner'
+    ? (isAuthenticated && currentUserId ? state.properties.filter(p => p.ownerId === currentUserId) : [])
+    : state.properties;
+
+  const activeProperty = displayProperties.find(p => p.id === state.activePropertyId) || displayProperties[0] || null;
+
+  // Add Property guard
+  const handleOpenAddProperty = () => {
+    if (!isAuthenticated || !currentUserId) {
+      setShowAuthModal(true);
+      return;
+    }
+    setShowAddPropertyModal(true);
+  };
 
   // Notification counts
   const propLeads = activeProperty ? state.leads.filter(l => l.propertyId === activeProperty.id) : [];
@@ -169,6 +197,7 @@ export function App() {
       await supabase.auth.signOut();
     }
     setIsAuthenticated(false);
+    setCurrentUserId('');
     setUserEmail('');
     setShowAuthModal(false);
     setState(prev => ({
@@ -242,18 +271,25 @@ export function App() {
 
   // Add Room with auto beds
   const handleAddRoom = (newRoom: Omit<Room, 'id'>, bedCount: number) => {
+    if (!isAuthenticated || !currentUserId) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    const roomId = `room-${Date.now()}`;
+    const createdRoom: Room = { ...newRoom, id: roomId };
+
+    const createdBeds: Bed[] = Array.from({ length: bedCount }, (_, i) => ({
+      id: `bed-${roomId}-${i + 1}`,
+      roomId,
+      propertyId: newRoom.propertyId,
+      bedLabel: bedCount === 1 ? 'Single Bed' : `Bed ${String.fromCharCode(65 + i)}`,
+      status: 'available'
+    }));
+
+    syncRoomToSupabase(createdRoom, createdBeds);
+
     setState(prev => {
-      const roomId = `room-${Date.now()}`;
-      const createdRoom: Room = { ...newRoom, id: roomId };
-
-      const createdBeds: Bed[] = Array.from({ length: bedCount }, (_, i) => ({
-        id: `bed-${roomId}-${i + 1}`,
-        roomId,
-        propertyId: newRoom.propertyId,
-        bedLabel: bedCount === 1 ? 'Single Bed' : `Bed ${String.fromCharCode(65 + i)}`,
-        status: 'available'
-      }));
-
       const nextRooms = [...prev.rooms, createdRoom];
       const nextBeds = [...prev.beds, ...createdBeds];
 
@@ -277,6 +313,10 @@ export function App() {
 
   // Update Property details
   const handleUpdateProperty = (updated: Property) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
     setState(prev => ({
       ...prev,
       properties: prev.properties.map(p => p.id === updated.id ? updated : p)
@@ -285,6 +325,10 @@ export function App() {
 
   // Update Lead status
   const handleUpdateLeadStatus = (leadId: string, status: Lead['status'], extra?: Partial<Lead>) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
     setState(prev => ({
       ...prev,
       leads: prev.leads.map(l => l.id === leadId ? { ...l, status, ...extra } : l)
@@ -299,31 +343,55 @@ export function App() {
     rent: number,
     deposit: number
   ) => {
+    if (!isAuthenticated || !currentUserId) {
+      setShowAuthModal(true);
+      return;
+    }
+    const targetRoom = state.rooms.find(r => r.id === roomId);
+    const targetBed = state.beds.find(b => b.id === bedId);
+    const tenantId = generateUUID();
+    const rentId = generateUUID();
+
+    const newTenant: Tenant = {
+      id: tenantId,
+      propertyId: lead.propertyId,
+      roomId,
+      bedId,
+      roomNumber: targetRoom?.roomNumber || '101',
+      bedLabel: targetBed?.bedLabel || 'Bed A',
+      fullName: lead.renterName,
+      phone: lead.renterPhone,
+      emergencyPhone: '',
+      collegeOrWork: lead.lookingFor,
+      idProofType: 'Aadhaar',
+      idProofNumber: 'Submitted',
+      checkInDate: new Date().toISOString().split('T')[0],
+      monthlyRent: rent,
+      depositPaid: deposit,
+      status: 'active',
+      policeVerificationStatus: 'submitted'
+    };
+
+    const newRent: RentRecord = {
+      id: rentId,
+      tenantId,
+      tenantName: lead.renterName,
+      propertyId: lead.propertyId,
+      propertyName: lead.propertyName,
+      roomNumber: targetRoom?.roomNumber || '101',
+      month: 'October 2026',
+      baseRent: rent,
+      wifiAmount: 150,
+      foodAmount: 0,
+      otherAmount: 0,
+      totalAmount: rent + 150,
+      status: 'pending',
+      dueDate: '2026-10-05'
+    };
+
+    syncTenantToSupabase(newTenant, newRent);
+
     setState(prev => {
-      const targetRoom = prev.rooms.find(r => r.id === roomId);
-      const targetBed = prev.beds.find(b => b.id === bedId);
-      const tenantId = `tenant-${Date.now()}`;
-
-      const newTenant: Tenant = {
-        id: tenantId,
-        propertyId: lead.propertyId,
-        roomId,
-        bedId,
-        roomNumber: targetRoom?.roomNumber || '101',
-        bedLabel: targetBed?.bedLabel || 'Bed A',
-        fullName: lead.renterName,
-        phone: lead.renterPhone,
-        emergencyPhone: '',
-        collegeOrWork: lead.lookingFor,
-        idProofType: 'Aadhaar',
-        idProofNumber: 'Submitted',
-        checkInDate: new Date().toISOString().split('T')[0],
-        monthlyRent: rent,
-        depositPaid: deposit,
-        status: 'active',
-        policeVerificationStatus: 'submitted'
-      };
-
       const nextBeds = prev.beds.map(b => b.id === bedId ? {
         ...b,
         status: 'occupied' as Bed['status'],
@@ -332,23 +400,6 @@ export function App() {
       } : b);
 
       const nextLeads = prev.leads.map(l => l.id === lead.id ? { ...l, status: 'booked' as Lead['status'] } : l);
-
-      const newRent: RentRecord = {
-        id: `rent-${Date.now()}`,
-        tenantId,
-        tenantName: lead.renterName,
-        propertyId: lead.propertyId,
-        propertyName: lead.propertyName,
-        roomNumber: targetRoom?.roomNumber || '101',
-        month: 'October 2026',
-        baseRent: rent,
-        wifiAmount: 150,
-        foodAmount: 0,
-        otherAmount: 0,
-        totalAmount: rent + 150,
-        status: 'pending',
-        dueDate: '2026-10-05'
-      };
 
       const nextProps = prev.properties.map(p => {
         if (p.id !== lead.propertyId) return p;
@@ -377,7 +428,7 @@ export function App() {
       leads: [
         {
           ...newLead,
-          id: `lead-${Date.now()}`,
+          id: generateUUID(),
           createdAt: new Date().toISOString()
         },
         ...prev.leads
@@ -387,33 +438,41 @@ export function App() {
 
   // Add Direct Tenant
   const handleAddTenant = (newTenant: Omit<Tenant, 'id'>) => {
-    setState(prev => {
-      const tenantId = `tenant-${Date.now()}`;
-      const tenant: Tenant = { ...newTenant, id: tenantId };
+    if (!isAuthenticated || !currentUserId) {
+      setShowAuthModal(true);
+      return;
+    }
 
+    const tenantId = generateUUID();
+    const rentId = generateUUID();
+    const tenant: Tenant = { ...newTenant, id: tenantId };
+
+    const rentRec: RentRecord = {
+      id: rentId,
+      tenantId,
+      tenantName: newTenant.fullName,
+      propertyId: newTenant.propertyId,
+      propertyName: state.properties.find(p => p.id === newTenant.propertyId)?.name || activeProperty?.name || 'Property',
+      roomNumber: newTenant.roomNumber,
+      month: 'October 2026',
+      baseRent: newTenant.monthlyRent,
+      wifiAmount: 150,
+      foodAmount: 0,
+      otherAmount: 0,
+      totalAmount: newTenant.monthlyRent + 150,
+      status: 'pending',
+      dueDate: '2026-10-05'
+    };
+
+    syncTenantToSupabase(tenant, rentRec);
+
+    setState(prev => {
       const nextBeds = prev.beds.map(b => b.id === newTenant.bedId ? {
         ...b,
         status: 'occupied' as Bed['status'],
         tenantId,
         tenantName: newTenant.fullName
       } : b);
-
-      const rentRec: RentRecord = {
-        id: `rent-${Date.now()}`,
-        tenantId,
-        tenantName: newTenant.fullName,
-        propertyId: newTenant.propertyId,
-        propertyName: prev.properties.find(p => p.id === newTenant.propertyId)?.name || activeProperty?.name || 'Property',
-        roomNumber: newTenant.roomNumber,
-        month: 'October 2026',
-        baseRent: newTenant.monthlyRent,
-        wifiAmount: 150,
-        foodAmount: 0,
-        otherAmount: 0,
-        totalAmount: newTenant.monthlyRent + 150,
-        status: 'pending',
-        dueDate: '2026-10-05'
-      };
 
       const nextProps = prev.properties.map(p => p.id === newTenant.propertyId ? {
         ...p,
@@ -432,6 +491,13 @@ export function App() {
 
   // Vacate Tenant & free bed
   const handleVacateTenant = (tenantId: string, bedId?: string) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    syncVacateTenantToSupabase(tenantId, bedId);
+
     setState(prev => {
       const nextTenants = prev.tenants.map(t => t.id === tenantId ? { ...t, status: 'vacated' as Tenant['status'] } : t);
       
@@ -465,9 +531,16 @@ export function App() {
 
   // Record Rent
   const handleRecordRentPayment = (record: Omit<RentRecord, 'id'>) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    const rentId = generateUUID();
+    const newRecord: RentRecord = { ...record, id: rentId };
+    syncRentRecordToSupabase(newRecord);
     setState(prev => ({
       ...prev,
-      rentRecords: [...prev.rentRecords, { ...record, id: `rent-${Date.now()}` }]
+      rentRecords: [...prev.rentRecords, newRecord]
     }));
   };
 
@@ -478,6 +551,12 @@ export function App() {
     method?: RentRecord['paymentMethod'], 
     ref?: string
   ) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    const paidDate = status === 'paid' ? new Date().toISOString().split('T')[0] : undefined;
+    syncRentStatusToSupabase(recordId, status, method, ref, paidDate);
     setState(prev => ({
       ...prev,
       rentRecords: prev.rentRecords.map(r => r.id === recordId ? {
@@ -485,13 +564,18 @@ export function App() {
         status,
         paymentMethod: method || r.paymentMethod,
         transactionRef: ref || r.transactionRef,
-        paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : r.paidDate
+        paidDate: paidDate || r.paidDate
       } : r)
     }));
   };
 
   // Complaints
   const handleUpdateComplaintStatus = (id: string, status: Complaint['status'], note?: string) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    syncComplaintStatusToSupabase(id, status, note);
     setState(prev => ({
       ...prev,
       complaints: prev.complaints.map(c => c.id === id ? {
@@ -510,7 +594,7 @@ export function App() {
       complaints: [
         {
           ...comp,
-          id: `comp-${Date.now()}`,
+          id: generateUUID(),
           createdAt: new Date().toISOString()
         },
         ...prev.complaints
@@ -519,11 +603,17 @@ export function App() {
   };
 
   // Add Property
-  const handleAddProperty = (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => {
+  const handleAddProperty = async (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => {
+    if (!isAuthenticated || !currentUserId) {
+      setShowAuthModal(true);
+      return;
+    }
+
     const propId = `prop-${Date.now()}`;
     const newProperty: Property = {
       ...prop,
       id: propId,
+      ownerId: currentUserId,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -542,7 +632,7 @@ export function App() {
       { id: `bed-${r.id}-b`, roomId: r.id, propertyId: propId, bedLabel: 'Bed B', status: 'available' as Bed['status'] }
     ]);
 
-    syncPropertyToSupabase(newProperty, newRooms, newBeds);
+    await syncPropertyToSupabase(newProperty, newRooms, newBeds);
 
     setState(prev => ({
       ...prev,
@@ -580,10 +670,10 @@ export function App() {
         onSelectRole={handleSelectRole}
         profile={state.profile}
         tenantProfile={state.tenantProfile}
-        properties={state.properties}
+        properties={displayProperties}
         activePropertyId={state.activePropertyId}
         onSelectProperty={id => setState(p => ({ ...p, activePropertyId: id }))}
-        onOpenAddProperty={() => setShowAddPropertyModal(true)}
+        onOpenAddProperty={handleOpenAddProperty}
         language={language}
         onToggleLanguage={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
         unreadCount={totalUnreadCount}
@@ -614,20 +704,33 @@ export function App() {
           {state.currentRole === 'owner' && (
             <>
               {!activeProperty && currentTab !== 'settings' ? (
-                <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+                <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Building2 size={32} />
                   </div>
-                  <h2 className="text-xl font-bold text-slate-800 mb-2">Welcome to RoomSaathi Host Portal</h2>
+                  <h2 className="text-xl font-bold text-slate-800 mb-2">
+                    {isAuthenticated ? `Welcome, ${state.profile.fullName || 'Host'}!` : 'RoomSaathi Host Portal'}
+                  </h2>
                   <p className="text-sm text-slate-500 mb-6">
-                    You haven't added any properties yet. List your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically.
+                    {isAuthenticated
+                      ? "You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically."
+                      : "Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely."}
                   </p>
                   <button
-                    onClick={() => setShowAddPropertyModal(true)}
+                    onClick={handleOpenAddProperty}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
                   >
-                    <Plus size={18} />
-                    Add Your First Property
+                    {isAuthenticated ? (
+                      <>
+                        <Plus size={18} />
+                        Add Your First Property
+                      </>
+                    ) : (
+                      <>
+                        <Lock size={16} />
+                        Sign In to List Property
+                      </>
+                    )}
                   </button>
                 </div>
               ) : (
@@ -646,7 +749,7 @@ export function App() {
                       onToggleBedStatus={handleToggleBedStatus}
                       onOpenQuickRent={() => setCurrentTab('billing')}
                       onOpenMeterCalc={() => setCurrentTab('billing')}
-                      onOpenAddProperty={() => setShowAddPropertyModal(true)}
+                      onOpenAddProperty={handleOpenAddProperty}
                     />
                   )}
 
@@ -799,6 +902,10 @@ export function App() {
         <AddPropertyModal
           onClose={() => setShowAddPropertyModal(false)}
           onAddProperty={handleAddProperty}
+          isAuthenticated={isAuthenticated}
+          currentUserId={currentUserId}
+          ownerName={state.profile.fullName}
+          onRequireAuth={() => setShowAuthModal(true)}
         />
       )}
 
