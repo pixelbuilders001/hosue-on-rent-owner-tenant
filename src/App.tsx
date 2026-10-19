@@ -73,38 +73,52 @@ export function App() {
 
     const client = supabase;
     if (client) {
+      const syncUserProfile = async (userId: string) => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRole = urlParams.get('role');
+
+        const { data: prof } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
+
+        let targetRole: UserRole | null = null;
+        if (urlRole === 'owner' || urlRole === 'tenant') {
+          targetRole = urlRole;
+          await client.from('profiles').update({ role: targetRole }).eq('id', userId);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (prof?.role === 'owner' || prof?.role === 'tenant') {
+          targetRole = prof.role as UserRole;
+        }
+
+        if (targetRole) {
+          setState(prev => ({
+            ...prev,
+            currentRole: targetRole!,
+            profile: targetRole === 'owner' ? {
+              ...prev.profile,
+              fullName: prof?.full_name || prev.profile.fullName,
+              phone: prof?.phone || prev.profile.phone
+            } : prev.profile,
+            tenantProfile: targetRole === 'tenant' ? {
+              ...prev.tenantProfile,
+              fullName: prof?.full_name || prev.tenantProfile.fullName,
+              phone: prof?.phone || prev.tenantProfile.phone
+            } : prev.tenantProfile
+          }));
+          setCurrentTab(targetRole === 'owner' ? 'dashboard' : 'explore');
+        } else {
+          // If no role set yet, prompt the user with the role chooser modal
+          setShowAuthModal(true);
+        }
+      };
+
       client.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          client.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
-            if (prof && (prof.role === 'owner' || prof.role === 'tenant')) {
-              setState(prev => ({
-                ...prev,
-                currentRole: prof.role as UserRole,
-                profile: prof.role === 'owner' ? {
-                  ...prev.profile,
-                  fullName: prof.full_name || prev.profile.fullName,
-                  phone: prof.phone || prev.profile.phone
-                } : prev.profile,
-                tenantProfile: prof.role === 'tenant' ? {
-                  ...prev.tenantProfile,
-                  fullName: prof.full_name || prev.tenantProfile.fullName,
-                  phone: prof.phone || prev.tenantProfile.phone
-                } : prev.tenantProfile
-              }));
-              setCurrentTab(prof.role === 'owner' ? 'dashboard' : 'explore');
-            }
-          });
+          syncUserProfile(session.user.id);
         }
       });
 
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
-          client.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
-            if (prof && (prof.role === 'owner' || prof.role === 'tenant')) {
-              setState(prev => ({ ...prev, currentRole: prof.role as UserRole }));
-              setCurrentTab(prof.role === 'owner' ? 'dashboard' : 'explore');
-            }
-          });
+          syncUserProfile(session.user.id);
         }
       });
 

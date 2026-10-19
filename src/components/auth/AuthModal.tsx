@@ -39,10 +39,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
-          queryParams: {
-            role: currentRole
-          }
+          redirectTo: `${window.location.origin}/?role=${currentRole}`
         }
       });
     } else {
