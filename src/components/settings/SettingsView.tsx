@@ -69,11 +69,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* Profile Card */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-            <img
-              src={profile.avatarUrl}
-              alt={profile.fullName}
-              className="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-600/30 shadow-xs"
-            />
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.fullName}
+                className="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-600/30 shadow-xs"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-2xl ring-2 ring-emerald-600/30 shadow-xs">
+                {profile.fullName.charAt(0).toUpperCase() || 'O'}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-slate-900 text-lg">{profile.fullName}</h3>

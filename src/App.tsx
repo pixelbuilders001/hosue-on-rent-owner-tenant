@@ -46,6 +46,10 @@ export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [language, setLanguage] = useState<Language>('en');
 
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+
   // Modals state
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -73,34 +77,46 @@ export function App() {
 
     const client = supabase;
     if (client) {
-      const syncUserProfile = async (userId: string) => {
+      const syncUserProfile = async (user: any) => {
+        setIsAuthenticated(true);
+        setUserEmail(user.email || '');
+
         const urlParams = new URLSearchParams(window.location.search);
         const urlRole = urlParams.get('role');
 
-        const { data: prof } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
+        const { data: prof } = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
 
         let targetRole: UserRole | null = null;
         if (urlRole === 'owner' || urlRole === 'tenant') {
           targetRole = urlRole;
-          await client.from('profiles').update({ role: targetRole }).eq('id', userId);
+          await client.from('profiles').update({ role: targetRole }).eq('id', user.id);
           window.history.replaceState({}, document.title, window.location.pathname);
         } else if (prof?.role === 'owner' || prof?.role === 'tenant') {
           targetRole = prof.role as UserRole;
         }
 
+        const realAvatar = prof?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
+        const realName = prof?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '';
+        const realPhone = prof?.phone || user.phone || '';
+
         if (targetRole) {
+          setShowAuthModal(false);
           setState(prev => ({
             ...prev,
             currentRole: targetRole!,
             profile: targetRole === 'owner' ? {
               ...prev.profile,
-              fullName: prof?.full_name || prev.profile.fullName,
-              phone: prof?.phone || prev.profile.phone
+              fullName: realName || prev.profile.fullName,
+              phone: realPhone || prev.profile.phone,
+              email: user.email || prev.profile.email,
+              avatarUrl: realAvatar
             } : prev.profile,
             tenantProfile: targetRole === 'tenant' ? {
               ...prev.tenantProfile,
-              fullName: prof?.full_name || prev.tenantProfile.fullName,
-              phone: prof?.phone || prev.tenantProfile.phone
+              fullName: realName || prev.tenantProfile.fullName,
+              phone: realPhone || prev.tenantProfile.phone,
+              email: user.email || prev.tenantProfile.email,
+              avatarUrl: realAvatar
             } : prev.tenantProfile
           }));
           setCurrentTab(targetRole === 'owner' ? 'dashboard' : 'explore');
@@ -112,13 +128,19 @@ export function App() {
 
       client.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          syncUserProfile(session.user.id);
+          syncUserProfile(session.user);
+        } else {
+          setIsAuthenticated(false);
+          setUserEmail('');
         }
       });
 
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
-          syncUserProfile(session.user.id);
+          syncUserProfile(session.user);
+        } else {
+          setIsAuthenticated(false);
+          setUserEmail('');
         }
       });
 
@@ -141,8 +163,39 @@ export function App() {
   const totalUnreadCount = leadsCount + openComplaintsCount;
   const savedCount = state.savedPropertyIds?.length || 0;
 
-  // Role Switcher handler
+  // Logout Handler
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setIsAuthenticated(false);
+    setUserEmail('');
+    setShowAuthModal(false);
+    setState(prev => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        fullName: 'Property Owner',
+        phone: '',
+        email: '',
+        avatarUrl: ''
+      },
+      tenantProfile: {
+        ...prev.tenantProfile,
+        fullName: 'User / Tenant',
+        phone: '',
+        email: '',
+        avatarUrl: ''
+      }
+    }));
+  };
+
+  // Role Switcher handler (locked when logged in)
   const handleSelectRole = (role: UserRole) => {
+    if (isAuthenticated && role !== state.currentRole) {
+      alert(`You are currently logged in as a ${state.currentRole === 'owner' ? 'Host' : 'Tenant'}. Please log out first to switch accounts.`);
+      return;
+    }
     setState(prev => ({ ...prev, currentRole: role }));
     if (role === 'owner') {
       setCurrentTab('dashboard');
@@ -535,6 +588,8 @@ export function App() {
         onToggleLanguage={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
         unreadCount={totalUnreadCount}
         onOpenProfile={() => setShowAuthModal(true)}
+        isAuthenticated={isAuthenticated}
+        onLogout={handleLogout}
       />
 
       {/* Main App Layout */}
@@ -757,6 +812,9 @@ export function App() {
           onClose={() => setShowAuthModal(false)}
           onUpdateProfile={handleUpdateProfile}
           onUpdateTenantProfile={handleUpdateTenantProfile}
+          isAuthenticated={isAuthenticated}
+          onLogout={handleLogout}
+          userEmail={userEmail}
         />
       )}
 

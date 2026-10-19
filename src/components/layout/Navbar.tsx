@@ -8,7 +8,10 @@ import {
   GraduationCap,
   Sparkles,
   UsersRound,
-  Compass
+  Compass,
+  Lock,
+  LogOut,
+  User
 } from 'lucide-react';
 import { OwnerProfile, TenantProfile, Property, Language, UserRole } from '../../types';
 import { t } from '../../services/i18n';
@@ -26,6 +29,8 @@ interface NavbarProps {
   onToggleLanguage: () => void;
   unreadCount: number;
   onOpenProfile: () => void;
+  isAuthenticated: boolean;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -40,10 +45,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   language,
   onToggleLanguage,
   unreadCount,
-  onOpenProfile
+  onOpenProfile,
+  isAuthenticated,
+  onLogout
 }) => {
   const [showPropertyMenu, setShowPropertyMenu] = useState(false);
   const activeProperty = properties.find(p => p.id === activePropertyId) || properties[0];
+
+  const activeProf = currentRole === 'owner' ? profile : tenantProfile;
+  const avatarUrl = activeProf.avatarUrl;
+  const displayName = activeProf.fullName ? activeProf.fullName.split(' ')[0] : 'User';
+  const userInitial = displayName.charAt(0).toUpperCase() || 'U';
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
@@ -124,31 +136,55 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Center: Live Role Switcher (Host vs Tenant) */}
           <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl border border-slate-200 shadow-inner shrink-0">
             <button
-              onClick={() => onSelectRole('owner')}
+              type="button"
+              onClick={() => {
+                if (isAuthenticated && currentRole !== 'owner') {
+                  alert("You are currently logged in as a Tenant. Please log out first to switch to Host mode.");
+                  return;
+                }
+                onSelectRole('owner');
+              }}
+              disabled={isAuthenticated && currentRole !== 'owner'}
+              title={isAuthenticated && currentRole !== 'owner' ? "Logged in as Tenant. Log out to switch." : "Switch to Host"}
               className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition ${
                 currentRole === 'owner'
                   ? 'bg-emerald-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : isAuthenticated
+                    ? 'text-slate-400 opacity-60 cursor-not-allowed'
+                    : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Building2 size={12} className="shrink-0" />
               <span>Host <span className="hidden md:inline">(मालिक)</span></span>
+              {isAuthenticated && currentRole !== 'owner' && <Lock size={10} className="text-slate-400 ml-0.5" />}
             </button>
 
             <button
-              onClick={() => onSelectRole('tenant')}
+              type="button"
+              onClick={() => {
+                if (isAuthenticated && currentRole !== 'tenant') {
+                  alert("You are currently logged in as a Host. Please log out first to switch to Tenant mode.");
+                  return;
+                }
+                onSelectRole('tenant');
+              }}
+              disabled={isAuthenticated && currentRole !== 'tenant'}
+              title={isAuthenticated && currentRole !== 'tenant' ? "Logged in as Host. Log out to switch." : "Switch to Tenant"}
               className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition ${
                 currentRole === 'tenant'
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : isAuthenticated
+                    ? 'text-slate-400 opacity-60 cursor-not-allowed'
+                    : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <GraduationCap size={13} className="shrink-0" />
               <span>Tenant <span className="hidden md:inline">(किरायेदार)</span></span>
+              {isAuthenticated && currentRole !== 'tenant' && <Lock size={10} className="text-slate-400 ml-0.5" />}
             </button>
           </div>
 
-          {/* Right: Language, Notifications, Profile */}
+          {/* Right: Language, Notifications, Profile, Logout */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             
             {/* Language Toggle */}
@@ -178,19 +214,44 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenProfile}
               className="flex items-center gap-1.5 pl-1 pr-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition shrink-0"
+              title={isAuthenticated ? "Account & Role Settings" : "Sign In / Profile"}
             >
-              <img
-                src={currentRole === 'owner' ? profile.avatarUrl : tenantProfile.avatarUrl}
-                alt="Profile"
-                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-1 ring-emerald-600/30"
-              />
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-1 ring-emerald-600/30"
+                />
+              ) : (
+                <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold ring-1 ring-white ${
+                  currentRole === 'owner' ? 'bg-emerald-700' : 'bg-blue-600'
+                }`}>
+                  {userInitial}
+                </div>
+              )}
               <div className="text-left hidden lg:block">
                 <div className="text-xs font-semibold text-slate-900 leading-tight">
-                  {currentRole === 'owner' ? profile.fullName.split(' ')[0] : tenantProfile.fullName.split(' ')[0]}
+                  {displayName}
                 </div>
-                <div className="text-[10px] text-slate-400 capitalize">{currentRole}</div>
+                <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
+                  <span>{currentRole}</span>
+                  {isAuthenticated && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Signed In" />}
+                </div>
               </div>
             </button>
+
+            {/* Quick Logout Button when Authenticated */}
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition text-[11px] sm:text-xs font-semibold shrink-0"
+                title="Log Out"
+              >
+                <LogOut size={13} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
 
           </div>
 

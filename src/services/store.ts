@@ -1,6 +1,6 @@
 import { OwnerProfile, TenantProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, UserRole } from '../types';
 
-const STORAGE_KEY = 'roomsaathi_clean_v1';
+const STORAGE_KEY = 'roomsaathi_clean_v2';
 
 export interface AppState {
   currentRole: UserRole;
@@ -22,7 +22,7 @@ const DEFAULT_TENANT_PROFILE: TenantProfile = {
   fullName: 'User / Tenant',
   phone: '',
   email: '',
-  avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  avatarUrl: '',
   role: 'tenant',
   collegeOrWork: ''
 };
@@ -32,7 +32,7 @@ const DEFAULT_PROFILE: OwnerProfile = {
   fullName: 'Property Owner',
   phone: '',
   email: '',
-  avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+  avatarUrl: '',
   upiId: '',
   role: 'owner',
   businessName: '',

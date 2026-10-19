@@ -92,11 +92,17 @@ export const TenantMyStayView: React.FC<TenantMyStayViewProps> = ({
       {/* Top Welcome Card */}
       <div className="bg-gradient-to-r from-emerald-900 to-teal-900 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <img
-            src={tenantProfile.avatarUrl}
-            alt={tenantProfile.fullName}
-            className="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-400/40"
-          />
+          {tenantProfile.avatarUrl ? (
+            <img
+              src={tenantProfile.avatarUrl}
+              alt={tenantProfile.fullName}
+              className="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-400/40"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-2xl ring-2 ring-emerald-400/40">
+              {tenantProfile.fullName.charAt(0).toUpperCase() || 'T'}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold">{tenantProfile.fullName}</h1>
