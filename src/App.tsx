@@ -519,7 +519,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-16 lg:pb-0">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-16 lg:pb-0 overflow-x-hidden w-full">
       
       {/* Top Navbar with Role Switcher */}
       <Navbar
@@ -538,7 +538,7 @@ export function App() {
       />
 
       {/* Main App Layout */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex">
+      <div className="flex-1 max-w-7xl w-full mx-auto flex min-w-0">
         
         {/* Role-Aware Sidebar */}
         <Sidebar
@@ -553,7 +553,7 @@ export function App() {
         />
 
         {/* Tab View Container */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto min-w-0 w-full">
           
           {/* OWNER VIEWS */}
           {state.currentRole === 'owner' && (

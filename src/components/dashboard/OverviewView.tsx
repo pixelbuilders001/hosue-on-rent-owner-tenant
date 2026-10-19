@@ -107,7 +107,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     <div className="space-y-6">
       
       {/* Top Banner / Hero Welcome */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-2xl text-white p-5 sm:p-7 shadow-lg relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-2xl text-white p-4 sm:p-7 shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/20 via-transparent to-transparent pointer-events-none" />
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
@@ -125,19 +125,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
 
           {/* Quick Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0">
+          <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 w-full sm:w-auto">
             <button
               onClick={onOpenMeterCalc}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition"
             >
-              <Zap size={16} className="text-amber-300" />
+              <Zap size={15} className="text-amber-300 shrink-0" />
               <span>{t(language, 'calculateMeter')}</span>
             </button>
             <button
               onClick={onOpenQuickRent}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition"
             >
-              <IndianRupee size={16} className="text-emerald-700" />
+              <IndianRupee size={15} className="text-emerald-700 shrink-0" />
               <span>{t(language, 'recordRent')}</span>
             </button>
           </div>
