@@ -20,7 +20,7 @@ import { t } from '../../services/i18n';
 import { TabType } from '../layout/Sidebar';
 
 interface OverviewViewProps {
-  property: Property;
+  property?: Property | null;
   rooms: Room[];
   beds: Bed[];
   tenants: Tenant[];
@@ -32,6 +32,7 @@ interface OverviewViewProps {
   onToggleBedStatus: (bedId: string) => void;
   onOpenQuickRent: () => void;
   onOpenMeterCalc: () => void;
+  onOpenAddProperty?: () => void;
 }
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
@@ -46,8 +47,32 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onNavigateTab,
   onToggleBedStatus,
   onOpenQuickRent,
-  onOpenMeterCalc
+  onOpenMeterCalc,
+  onOpenAddProperty
 }) => {
+  if (!property) {
+    return (
+      <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+        <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Building2 size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Welcome to RoomSaathi Host Portal</h2>
+        <p className="text-sm text-slate-500 mb-6">
+          You haven't listed any property yet. Add your first PG, hostel, or flat to start managing rooms, beds, tenants, and tracking rent.
+        </p>
+        {onOpenAddProperty && (
+          <button
+            onClick={onOpenAddProperty}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+          >
+            <Plus size={18} />
+            Add Your First Property
+          </button>
+        )}
+      </div>
+    );
+  }
+
   // Filter items for the active property
   const propBeds = beds.filter(b => b.propertyId === property.id);
   const occupiedCount = propBeds.filter(b => b.status === 'occupied').length;

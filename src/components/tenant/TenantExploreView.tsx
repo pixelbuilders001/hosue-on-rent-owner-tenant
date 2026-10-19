@@ -151,8 +151,34 @@ export const TenantExploreView: React.FC<TenantExploreViewProps> = ({
       </div>
 
       {/* Properties Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredProperties.map(prop => {
+      {filteredProperties.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-dashed border-emerald-300 p-12 text-center max-w-lg mx-auto shadow-xs">
+          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Building2 size={28} />
+          </div>
+          <h3 className="text-base font-bold text-slate-800 mb-1">No rooms found</h3>
+          <p className="text-xs text-slate-500 mb-4">
+            {properties.length === 0 
+              ? "No rooms are listed yet in Samastipur. Check back soon or switch to Host mode to list your property!"
+              : "Try adjusting your budget or destination filters to find available rooms."}
+          </p>
+          {(selectedDestination !== 'All' || maxBudget !== 'all' || selectedType !== 'All' || searchQuery) && (
+            <button
+              onClick={() => {
+                setSelectedDestination('All');
+                setMaxBudget('all');
+                setSelectedType('All');
+                setSearchQuery('');
+              }}
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 underline"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredProperties.map(prop => {
           const isSaved = savedPropertyIds.includes(prop.id);
           const propBeds = beds.filter(b => b.propertyId === prop.id);
           const vacantCount = propBeds.filter(b => b.status === 'available').length;
@@ -268,7 +294,8 @@ export const TenantExploreView: React.FC<TenantExploreViewProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
     </div>
   );

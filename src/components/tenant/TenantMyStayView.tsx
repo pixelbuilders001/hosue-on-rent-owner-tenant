@@ -19,7 +19,7 @@ import { Property, TenantProfile, RentRecord, Complaint, Language } from '../../
 
 interface TenantMyStayViewProps {
   tenantProfile: TenantProfile;
-  property: Property;
+  property?: Property | null;
   rentRecords: RentRecord[];
   complaints: Complaint[];
   language: Language;
@@ -42,30 +42,23 @@ export const TenantMyStayView: React.FC<TenantMyStayViewProps> = ({
   const [complaintSuccess, setComplaintSuccess] = useState(false);
   const [showUpiModal, setShowUpiModal] = useState(false);
 
+  if (!property) {
+    return (
+      <div className="bg-white rounded-3xl border border-dashed border-emerald-300 p-12 text-center max-w-lg mx-auto shadow-xs my-8">
+        <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Building2 size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">No Active Stay</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          You are currently not checked into any room or PG. Explore rooms in Samastipur, schedule visits, and move in to manage your rent and maintenance requests here.
+        </p>
+      </div>
+    );
+  }
+
   // My rent records
-  const myRents = rentRecords.filter(r => r.tenantName === tenantProfile.fullName);
-  const currentRent = myRents[0] || {
-    id: 'rent-current',
-    tenantId: tenantProfile.id,
-    tenantName: tenantProfile.fullName,
-    propertyId: property.id,
-    propertyName: property.name,
-    roomNumber: tenantProfile.activeRoomNumber || '101',
-    month: 'October 2026',
-    baseRent: 4500,
-    prevReading: 1240,
-    currentReading: 1285,
-    electricityUnits: 45,
-    electricityAmount: 405,
-    wifiAmount: 150,
-    foodAmount: 0,
-    otherAmount: 0,
-    totalAmount: 5055,
-    status: 'paid' as const,
-    dueDate: '2026-10-05',
-    paidDate: '2026-10-04',
-    paymentMethod: 'UPI' as const
-  };
+  const myRents = rentRecords.filter(r => r.tenantName === tenantProfile.fullName || r.tenantId === tenantProfile.id);
+  const currentRent = myRents[0] || null;
 
   const myComplaints = complaints.filter(c => c.tenantName === tenantProfile.fullName);
 
@@ -91,7 +84,7 @@ export const TenantMyStayView: React.FC<TenantMyStayViewProps> = ({
     setTimeout(() => setComplaintSuccess(false), 3000);
   };
 
-  const isPaid = currentRent.status === 'paid';
+  const isPaid = currentRent?.status === 'paid';
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -127,62 +120,72 @@ export const TenantMyStayView: React.FC<TenantMyStayViewProps> = ({
 
       {/* Current Month Rent & Electricity Bill */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              {currentRent.month} Rent & Bill
+        {currentRent ? (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  {currentRent.month} Rent & Bill
+                </div>
+                <div className="text-2xl font-black text-slate-900 mt-0.5">
+                  ₹{currentRent.totalAmount.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase flex items-center gap-1.5 ${
+                  isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'
+                }`}>
+                  {isPaid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  <span>{isPaid ? 'Payment Complete (जमा हुआ)' : 'Rent Due (बाकी है)'}</span>
+                </span>
+
+                {isPaid ? (
+                  <button
+                    onClick={() => onViewReceipt(currentRent)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-2xs transition"
+                  >
+                    <Receipt size={14} />
+                    <span>View Receipt</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowUpiModal(true)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition"
+                  >
+                    <QrCode size={14} />
+                    <span>Pay via UPI</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">
-              ₹{currentRent.totalAmount.toLocaleString('en-IN')}
+
+            {/* Detailed Bill Breakdown */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">Room Rent:</span>
+                <span className="font-bold text-slate-900 text-sm">₹{currentRent.baseRent.toLocaleString('en-IN')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Sub-meter Electricity:</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  ₹{currentRent.electricityAmount || 0}
+                  <span className="text-[11px] text-slate-400 font-normal"> ({currentRent.electricityUnits || 0} units @ ₹9)</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">WiFi & Maintenance:</span>
+                <span className="font-bold text-slate-900 text-sm">₹{currentRent.wifiAmount || 0}</span>
+              </div>
             </div>
+          </>
+        ) : (
+          <div className="text-center py-6">
+            <Clock className="w-10 h-10 text-emerald-600 mx-auto mb-2 opacity-80" />
+            <h3 className="text-base font-bold text-slate-800">No Rent Due</h3>
+            <p className="text-xs text-slate-500 mt-1">There are no pending or active rent bills generated for your stay yet.</p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase flex items-center gap-1.5 ${
-              isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'
-            }`}>
-              {isPaid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-              <span>{isPaid ? 'Payment Complete (जमा हुआ)' : 'Rent Due (बाकी है)'}</span>
-            </span>
-
-            {isPaid ? (
-              <button
-                onClick={() => onViewReceipt(currentRent)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-2xs transition"
-              >
-                <Receipt size={14} />
-                <span>View Receipt</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowUpiModal(true)}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition"
-              >
-                <QrCode size={14} />
-                <span>Pay via UPI</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Detailed Bill Breakdown */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
-          <div>
-            <span className="text-slate-400 block text-[11px]">Room Rent:</span>
-            <span className="font-bold text-slate-900 text-sm">₹{currentRent.baseRent.toLocaleString('en-IN')}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[11px]">Sub-meter Electricity:</span>
-            <span className="font-bold text-slate-900 text-sm">
-              ₹{currentRent.electricityAmount || 0}
-              <span className="text-[11px] text-slate-400 font-normal"> ({currentRent.electricityUnits || 0} units @ ₹9)</span>
-            </span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[11px]">WiFi & Maintenance:</span>
-            <span className="font-bold text-slate-900 text-sm">₹{currentRent.wifiAmount}</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Maintenance Request / Complaint Desk */}

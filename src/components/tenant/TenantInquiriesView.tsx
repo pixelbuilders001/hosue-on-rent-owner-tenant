@@ -14,7 +14,12 @@ export const TenantInquiriesView: React.FC<TenantInquiriesViewProps> = ({
   tenantPhone
 }) => {
   // Leads matching tenant phone
-  const myInquiries = leads.filter(l => l.renterPhone.includes('97091') || l.renterPhone.includes(tenantPhone) || l.status === 'visit_scheduled' || l.status === 'new');
+  const cleanPhone = tenantPhone.replace(/\D/g, '');
+  const myInquiries = leads.filter(l => {
+    if (!cleanPhone) return false;
+    const lPhone = l.renterPhone.replace(/\D/g, '');
+    return lPhone.includes(cleanPhone) || cleanPhone.includes(lPhone);
+  });
 
   const openWhatsApp = (phone: string, text: string) => {
     const cleaned = phone.replace(/[^0-9]/g, '');
@@ -42,7 +47,7 @@ export const TenantInquiriesView: React.FC<TenantInquiriesViewProps> = ({
           </div>
         ) : (
           myInquiries.map(inq => {
-            const prop = properties.find(p => p.id === inq.propertyId) || properties[0];
+            const prop = properties.find(p => p.id === inq.propertyId);
             const isVisit = inq.status === 'visit_scheduled';
 
             return (
@@ -62,7 +67,7 @@ export const TenantInquiriesView: React.FC<TenantInquiriesViewProps> = ({
 
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     <MapPin size={13} className="text-emerald-600 shrink-0" />
-                    <span>{prop.address} ({prop.landmark})</span>
+                    <span>{prop ? `${prop.address} (${prop.landmark})` : inq.destination || 'Samastipur'}</span>
                   </div>
 
                   {isVisit && inq.visitDate && (

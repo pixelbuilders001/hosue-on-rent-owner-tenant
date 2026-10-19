@@ -15,6 +15,7 @@ import { TenantExploreView } from './components/tenant/TenantExploreView';
 import { TenantRoomDetailModal } from './components/tenant/TenantRoomDetailModal';
 import { TenantMyStayView } from './components/tenant/TenantMyStayView';
 import { TenantInquiriesView } from './components/tenant/TenantInquiriesView';
+import { Building2, Plus } from 'lucide-react';
 import { 
   getInitialState, 
   saveState, 
@@ -22,7 +23,8 @@ import {
   fetchLiveSupabaseData,
   syncBedStatusToSupabase,
   syncLeadToSupabase,
-  syncComplaintToSupabase
+  syncComplaintToSupabase,
+  syncPropertyToSupabase
 } from './services/store';
 import { supabase } from './services/supabase';
 import { 
@@ -115,9 +117,9 @@ export function App() {
   const activeProperty = state.properties.find(p => p.id === state.activePropertyId) || state.properties[0];
 
   // Notification counts
-  const propLeads = state.leads.filter(l => l.propertyId === activeProperty.id);
-  const propRents = state.rentRecords.filter(r => r.propertyId === activeProperty.id);
-  const propComplaints = state.complaints.filter(c => c.propertyId === activeProperty.id);
+  const propLeads = activeProperty ? state.leads.filter(l => l.propertyId === activeProperty.id) : [];
+  const propRents = activeProperty ? state.rentRecords.filter(r => r.propertyId === activeProperty.id) : [];
+  const propComplaints = activeProperty ? state.complaints.filter(c => c.propertyId === activeProperty.id) : [];
 
   const leadsCount = propLeads.filter(l => l.status === 'new').length;
   const dueRentsCount = propRents.filter(r => r.status === 'overdue' || r.status === 'pending').length;
@@ -159,8 +161,9 @@ export function App() {
         };
       });
 
-      const avail = nextBeds.filter(b => b.propertyId === activeProperty.id && b.status === 'available').length;
-      const nextProps = prev.properties.map(p => p.id === activeProperty.id ? { ...p, availableBeds: avail } : p);
+      const targetPropId = targetBed?.propertyId || activeProperty?.id;
+      const avail = targetPropId ? nextBeds.filter(b => b.propertyId === targetPropId && b.status === 'available').length : 0;
+      const nextProps = prev.properties.map(p => p.id === targetPropId ? { ...p, availableBeds: avail } : p);
 
       return {
         ...prev,
@@ -333,7 +336,7 @@ export function App() {
         tenantId,
         tenantName: newTenant.fullName,
         propertyId: newTenant.propertyId,
-        propertyName: activeProperty.name,
+        propertyName: prev.properties.find(p => p.id === newTenant.propertyId)?.name || activeProperty?.name || 'Property',
         roomNumber: newTenant.roomNumber,
         month: 'October 2026',
         baseRent: newTenant.monthlyRent,
@@ -377,7 +380,9 @@ export function App() {
         return b;
       });
 
-      const nextProps = prev.properties.map(p => p.id === activeProperty.id ? {
+      const targetTenant = prev.tenants.find(t => t.id === tenantId);
+      const propId = targetTenant?.propertyId || activeProperty?.id;
+      const nextProps = prev.properties.map(p => p.id === propId ? {
         ...p,
         availableBeds: p.availableBeds + 1
       } : p);
@@ -470,6 +475,8 @@ export function App() {
       { id: `bed-${r.id}-b`, roomId: r.id, propertyId: propId, bedLabel: 'Bed B', status: 'available' as Bed['status'] }
     ]);
 
+    syncPropertyToSupabase(newProperty, newRooms, newBeds);
+
     setState(prev => ({
       ...prev,
       properties: [...prev.properties, newProperty],
@@ -537,22 +544,42 @@ export function App() {
           {/* OWNER VIEWS */}
           {state.currentRole === 'owner' && (
             <>
-              {currentTab === 'dashboard' && (
-                <OverviewView
-                  property={activeProperty}
-                  rooms={state.rooms}
-                  beds={state.beds}
-                  tenants={state.tenants}
-                  leads={state.leads}
-                  rentRecords={state.rentRecords}
-                  complaints={state.complaints}
-                  language={language}
-                  onNavigateTab={setCurrentTab}
-                  onToggleBedStatus={handleToggleBedStatus}
-                  onOpenQuickRent={() => setCurrentTab('billing')}
-                  onOpenMeterCalc={() => setCurrentTab('billing')}
-                />
-              )}
+              {!activeProperty && currentTab !== 'settings' ? (
+                <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Building2 size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800 mb-2">Welcome to RoomSaathi Host Portal</h2>
+                  <p className="text-sm text-slate-500 mb-6">
+                    You haven't added any properties yet. List your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically.
+                  </p>
+                  <button
+                    onClick={() => setShowAddPropertyModal(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                  >
+                    <Plus size={18} />
+                    Add Your First Property
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {currentTab === 'dashboard' && (
+                    <OverviewView
+                      property={activeProperty}
+                      rooms={state.rooms}
+                      beds={state.beds}
+                      tenants={state.tenants}
+                      leads={state.leads}
+                      rentRecords={state.rentRecords}
+                      complaints={state.complaints}
+                      language={language}
+                      onNavigateTab={setCurrentTab}
+                      onToggleBedStatus={handleToggleBedStatus}
+                      onOpenQuickRent={() => setCurrentTab('billing')}
+                      onOpenMeterCalc={() => setCurrentTab('billing')}
+                      onOpenAddProperty={() => setShowAddPropertyModal(true)}
+                    />
+                  )}
 
               {currentTab === 'rooms' && (
                 <RoomsBedsView
@@ -613,6 +640,8 @@ export function App() {
                   onUpdateComplaintStatus={handleUpdateComplaintStatus}
                   onAddComplaint={handleAddComplaint}
                 />
+              )}
+                </>
               )}
 
               {currentTab === 'settings' && (
