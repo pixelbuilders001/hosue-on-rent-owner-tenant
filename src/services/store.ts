@@ -423,3 +423,152 @@ export function saveState(state: AppState): void {
     }
   }
 }
+
+import { supabase } from './supabase';
+
+export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null> {
+  if (!supabase) return null;
+  try {
+    const [propsRes, roomsRes, bedsRes, leadsRes, tenantsRes, rentsRes, compRes] = await Promise.all([
+      supabase.from('properties').select('*').eq('is_active', true),
+      supabase.from('rooms').select('*'),
+      supabase.from('beds').select('*'),
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      supabase.from('tenants').select('*').order('created_at', { ascending: false }),
+      supabase.from('rent_records').select('*').order('created_at', { ascending: false }),
+      supabase.from('complaints').select('*').order('created_at', { ascending: false }),
+    ]);
+
+    const partial: Partial<AppState> = {};
+
+    if (propsRes.data && propsRes.data.length > 0) {
+      partial.properties = propsRes.data.map((p: any) => ({
+        id: p.id,
+        ownerId: p.owner_id || 'owner-rajesh-01',
+        name: p.name,
+        type: p.type,
+        address: p.address || p.area,
+        area: p.area,
+        city: p.city,
+        landmark: p.landmark || '',
+        totalBeds: p.total_beds,
+        availableBeds: p.available_beds,
+        baseRent: p.rent,
+        deposit: p.deposit,
+        brokerage: p.brokerage,
+        electricityType: p.electricity_type || 'meter_unit',
+        electricityRate: Number(p.electricity_rate || 9),
+        wifiCost: p.wifi_cost,
+        maintenance: p.maintenance,
+        foodAvailable: p.food_available,
+        foodIncluded: p.food_included,
+        foodCost: p.food_cost,
+        rules: p.rules || [],
+        amenities: p.amenities || [],
+        image: p.image || '',
+        isActive: p.is_active,
+        createdAt: p.created_at
+      }));
+    }
+
+    if (roomsRes.data && roomsRes.data.length > 0) {
+      partial.rooms = roomsRes.data.map((r: any) => ({
+        id: r.id,
+        propertyId: r.property_id,
+        roomNumber: r.room_number,
+        floor: r.floor || 1,
+        roomType: r.accommodation,
+        totalBeds: r.total_beds || 2,
+        baseRent: r.rent
+      }));
+    }
+
+    if (bedsRes.data && bedsRes.data.length > 0) {
+      partial.beds = bedsRes.data.map((b: any) => ({
+        id: b.id,
+        roomId: b.room_id,
+        propertyId: b.property_id,
+        bedLabel: b.bed_label,
+        status: b.status,
+        tenantId: b.tenant_id,
+        tenantName: b.tenant_name
+      }));
+    }
+
+    if (leadsRes.data && leadsRes.data.length > 0) {
+      partial.leads = leadsRes.data.map((l: any) => ({
+        id: l.id,
+        propertyId: l.property_id,
+        propertyName: 'RoomSaathi Property',
+        renterName: l.renter_name,
+        renterPhone: l.renter_phone,
+        budget: l.budget,
+        lookingFor: l.looking_for,
+        destination: l.destination,
+        status: l.status,
+        visitDate: l.visit_date,
+        visitTime: l.visit_time,
+        notes: l.notes,
+        createdAt: l.created_at
+      }));
+    }
+
+    return partial;
+  } catch (err) {
+    console.error('Error fetching live Supabase data', err);
+    return null;
+  }
+}
+
+export async function syncLeadToSupabase(lead: Omit<Lead, 'id' | 'createdAt'>) {
+  if (!supabase) return;
+  try {
+    await supabase.from('leads').insert({
+      property_id: lead.propertyId,
+      renter_name: lead.renterName,
+      renter_phone: lead.renterPhone,
+      budget: lead.budget,
+      looking_for: lead.lookingFor,
+      destination: lead.destination,
+      status: lead.status,
+      visit_date: lead.visitDate || '',
+      visit_time: lead.visitTime || '',
+      notes: lead.notes || ''
+    });
+  } catch (e) {
+    console.error('Failed to sync lead to Supabase', e);
+  }
+}
+
+export async function syncBedStatusToSupabase(bedId: string, status: string, tenantName?: string) {
+  if (!supabase) return;
+  try {
+    await supabase.from('beds').update({
+      status,
+      tenant_name: tenantName || null
+    }).eq('id', bedId);
+  } catch (e) {
+    console.error('Failed to sync bed status to Supabase', e);
+  }
+}
+
+export async function syncComplaintToSupabase(comp: Omit<Complaint, 'id' | 'createdAt'>) {
+  if (!supabase) return;
+  try {
+    await supabase.from('complaints').insert({
+      property_id: comp.propertyId,
+      property_name: comp.propertyName,
+      tenant_name: comp.tenantName,
+      room_number: comp.roomNumber,
+      category: comp.category,
+      title: comp.title,
+      description: comp.description,
+      priority: comp.priority,
+      status: comp.status,
+      admin_note: comp.adminNote || ''
+    });
+  } catch (e) {
+    console.error('Failed to sync complaint to Supabase', e);
+  }
+}
+

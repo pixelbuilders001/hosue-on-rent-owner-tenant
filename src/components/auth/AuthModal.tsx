@@ -39,7 +39,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin,
+          queryParams: {
+            role: currentRole
+          }
         }
       });
     } else {
@@ -47,7 +50,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentRole === 'owner') {
       onUpdateProfile({
@@ -61,6 +64,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         fullName: inputName,
         phone: inputPhone
       });
+    }
+    if (supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('profiles').update({
+          role: currentRole,
+          full_name: inputName,
+          phone: inputPhone
+        }).eq('id', user.id);
+      }
     }
     setSavedSuccess(true);
     setTimeout(() => {

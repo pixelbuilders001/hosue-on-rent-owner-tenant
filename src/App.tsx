@@ -15,7 +15,16 @@ import { TenantExploreView } from './components/tenant/TenantExploreView';
 import { TenantRoomDetailModal } from './components/tenant/TenantRoomDetailModal';
 import { TenantMyStayView } from './components/tenant/TenantMyStayView';
 import { TenantInquiriesView } from './components/tenant/TenantInquiriesView';
-import { getInitialState, saveState, AppState } from './services/store';
+import { 
+  getInitialState, 
+  saveState, 
+  AppState,
+  fetchLiveSupabaseData,
+  syncBedStatusToSupabase,
+  syncLeadToSupabase,
+  syncComplaintToSupabase
+} from './services/store';
+import { supabase } from './services/supabase';
 import { 
   Property, 
   Room, 
@@ -46,6 +55,63 @@ export function App() {
     saveState(state);
   }, [state]);
 
+  // Fetch live Supabase data on mount & bind auth state
+  useEffect(() => {
+    fetchLiveSupabaseData().then(liveData => {
+      if (liveData) {
+        setState(prev => ({
+          ...prev,
+          properties: liveData.properties && liveData.properties.length > 0 ? liveData.properties : prev.properties,
+          rooms: liveData.rooms && liveData.rooms.length > 0 ? liveData.rooms : prev.rooms,
+          beds: liveData.beds && liveData.beds.length > 0 ? liveData.beds : prev.beds,
+          leads: liveData.leads && liveData.leads.length > 0 ? liveData.leads : prev.leads
+        }));
+      }
+    });
+
+    const client = supabase;
+    if (client) {
+      client.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          client.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
+            if (prof && (prof.role === 'owner' || prof.role === 'tenant')) {
+              setState(prev => ({
+                ...prev,
+                currentRole: prof.role as UserRole,
+                profile: prof.role === 'owner' ? {
+                  ...prev.profile,
+                  fullName: prof.full_name || prev.profile.fullName,
+                  phone: prof.phone || prev.profile.phone
+                } : prev.profile,
+                tenantProfile: prof.role === 'tenant' ? {
+                  ...prev.tenantProfile,
+                  fullName: prof.full_name || prev.tenantProfile.fullName,
+                  phone: prof.phone || prev.tenantProfile.phone
+                } : prev.tenantProfile
+              }));
+              setCurrentTab(prof.role === 'owner' ? 'dashboard' : 'explore');
+            }
+          });
+        }
+      });
+
+      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          client.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
+            if (prof && (prof.role === 'owner' || prof.role === 'tenant')) {
+              setState(prev => ({ ...prev, currentRole: prof.role as UserRole }));
+              setCurrentTab(prof.role === 'owner' ? 'dashboard' : 'explore');
+            }
+          });
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
   const activeProperty = state.properties.find(p => p.id === state.activePropertyId) || state.properties[0];
 
   // Notification counts
@@ -67,14 +133,25 @@ export function App() {
     } else {
       setCurrentTab('explore');
     }
+    const client = supabase;
+    if (client) {
+      client.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          client.from('profiles').update({ role }).eq('id', user.id).then();
+        }
+      });
+    }
   };
 
   // Toggle bed status cycle: available -> occupied -> reserved -> available
   const handleToggleBedStatus = (bedId: string) => {
+    const targetBed = state.beds.find(b => b.id === bedId);
+    const nextStatus = targetBed?.status === 'available' ? 'occupied' : targetBed?.status === 'occupied' ? 'reserved' : 'available';
+    syncBedStatusToSupabase(bedId, nextStatus);
+
     setState(prev => {
       const nextBeds = prev.beds.map(b => {
         if (b.id !== bedId) return b;
-        const nextStatus = b.status === 'available' ? 'occupied' : b.status === 'occupied' ? 'reserved' : 'available';
         return {
           ...b,
           status: nextStatus as Bed['status'],
@@ -224,6 +301,7 @@ export function App() {
 
   // Add Walk-in inquiry or Tenant inquiry
   const handleAddNewLead = (newLead: Omit<Lead, 'id' | 'createdAt'>) => {
+    syncLeadToSupabase(newLead);
     setState(prev => ({
       ...prev,
       leads: [
@@ -354,6 +432,7 @@ export function App() {
   };
 
   const handleAddComplaint = (comp: Omit<Complaint, 'id' | 'createdAt'>) => {
+    syncComplaintToSupabase(comp);
     setState(prev => ({
       ...prev,
       complaints: [
