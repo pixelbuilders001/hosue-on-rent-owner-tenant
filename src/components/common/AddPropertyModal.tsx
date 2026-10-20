@@ -20,10 +20,12 @@ import {
   Utensils,
   Zap,
   Trash2,
-  Navigation
+  Navigation,
+  Camera
 } from 'lucide-react';
 import { calculateTransitDistances, getLiveDeviceCoordinates } from '../../services/distanceService';
 import { uploadPropertyImage } from '../../services/storageService';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface AddPropertyModalProps {
   onClose: () => void;
@@ -122,10 +124,25 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   ]);
   const [customRule, setCustomRule] = useState('');
 
-  // Media & Storage
-  const [image, setImage] = useState(initialProperty?.image || '');
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  // Media & Storage (Multi-Image: min 1, max 3)
+  const [images, setImages] = useState<string[]>(() => {
+    if (initialProperty?.images && initialProperty.images.length > 0) {
+      return initialProperty.images.slice(0, 3);
+    }
+    if (initialProperty?.image) {
+      return [initialProperty.image];
+    }
+    return [];
+  });
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [uploadSlotErrors, setUploadSlotErrors] = useState<{ [slot: number]: string }>({});
+  const [cameraModalSlot, setCameraModalSlot] = useState<number | null>(null);
+  const fileInputRef0 = React.useRef<HTMLInputElement>(null);
+  const fileInputRef1 = React.useRef<HTMLInputElement>(null);
+  const fileInputRef2 = React.useRef<HTMLInputElement>(null);
+
+  // Backward compatibility alias for single cover image
+  const image = images[0] || '';
 
   // Rooms & Inventory
   const [initialRooms, setInitialRooms] = useState(4);
@@ -164,7 +181,13 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       setFoodCost(initialProperty.foodCost || 2200);
       setSelectedAmenities(initialProperty.amenities || []);
       setRules(initialProperty.rules || []);
-      setImage(initialProperty.image || '');
+      if (initialProperty.images && initialProperty.images.length > 0) {
+        setImages(initialProperty.images.slice(0, 3));
+      } else if (initialProperty.image) {
+        setImages([initialProperty.image]);
+      } else {
+        setImages([]);
+      }
       setIsActive(initialProperty.isActive ?? true);
       setVerificationStatus(initialProperty.verificationStatus || 'pending');
     }
@@ -208,26 +231,48 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     }
   };
 
-  // Handle File Upload to Supabase Storage
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingImage(true);
-    setUploadError('');
+  // Slot File Upload to Supabase Storage
+  const handleSlotFileUpload = async (file: File, slotIndex: number) => {
+    setUploadingSlot(slotIndex);
+    setUploadSlotErrors(prev => ({ ...prev, [slotIndex]: '' }));
 
     try {
-      const res = await uploadPropertyImage(file, name ? name.slice(0, 15) : 'property');
+      const cleanPrefix = name ? name.slice(0, 10).replace(/[^a-zA-Z0-9]/g, '') : 'prop';
+      const res = await uploadPropertyImage(file, `${cleanPrefix}-photo${slotIndex + 1}`);
       if (res.success && res.publicUrl) {
-        setImage(res.publicUrl);
+        setImages(prev => {
+          const next = [...prev];
+          next[slotIndex] = res.publicUrl!;
+          return next;
+        });
       } else {
-        setUploadError(res.error || 'Failed to upload photo. Please try again.');
+        setUploadSlotErrors(prev => ({ ...prev, [slotIndex]: res.error || 'Failed to upload photo.' }));
       }
     } catch (err: any) {
-      setUploadError(err?.message || 'Error uploading file.');
+      setUploadSlotErrors(prev => ({ ...prev, [slotIndex]: err?.message || 'Error uploading file.' }));
     } finally {
-      setIsUploadingImage(false);
+      setUploadingSlot(null);
     }
+  };
+
+  const handleSlotCameraCapture = (file: File, slotIndex: number) => {
+    handleSlotFileUpload(file, slotIndex);
+  };
+
+  const handleSlotRemove = (slotIndex: number) => {
+    setImages(prev => {
+      const next = [...prev];
+      next.splice(slotIndex, 1);
+      return next;
+    });
+  };
+
+  const handleSlotUrlChange = (url: string, slotIndex: number) => {
+    setImages(prev => {
+      const next = [...prev];
+      next[slotIndex] = url;
+      return next;
+    });
   };
 
   // Toggle Amenity
@@ -310,6 +355,16 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       return;
     }
 
+    const validImages = images.filter(img => img && img.trim() !== '');
+    if (validImages.length === 0) {
+      setActiveTab('basic');
+      alert("Please upload at least 1 photo of your property (minimum 1, maximum 3 required).");
+      return;
+    }
+
+    const primaryImage = validImages[0];
+    const finalImagesList = validImages.slice(0, 3);
+
     if (isEditMode && initialProperty && onUpdateProperty) {
       onUpdateProperty({
         ...initialProperty,
@@ -338,7 +393,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         foodCost: foodAvailable ? Number(foodCost) : 0,
         rules,
         amenities: selectedAmenities,
-        image: image || initialProperty.image,
+        image: primaryImage,
+        images: finalImagesList,
         description: description || initialProperty.description,
         isActive,
         verificationStatus
@@ -379,7 +435,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       foodCost: foodAvailable ? Number(foodCost) : 0,
       rules,
       amenities: selectedAmenities,
-      image: image || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800&auto=format&fit=crop&q=80',
+      image: primaryImage,
+      images: finalImagesList,
       description: description || `${name} located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} High speed WiFi, security, and comfortable student accommodation.`,
       ownerName: ownerName || 'RoomSaathi Landlord',
       isActive,
@@ -389,80 +446,162 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     onClose();
   };
 
-  // Reusable Photo Upload UI
-  const renderPhotoUploadSection = (title: string, subtitle?: string) => (
-    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <label className="block font-bold text-slate-800 text-xs">
-            {title}
-          </label>
-          {subtitle && <p className="text-[10px] text-slate-500">{subtitle}</p>}
-        </div>
-        {image && (
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
-            <Check size={10} /> Photo Attached
-          </span>
-        )}
-      </div>
+  // Reusable Multi-Photo Upload UI (1 to 3 slots)
+  const slotLabels = [
+    { title: 'Cover / Main Photo *', desc: 'Main photo displayed in listings (Required)' },
+    { title: 'Room / Interior Photo', desc: 'Bedroom, furniture, or study area (Optional)' },
+    { title: 'Washroom / Common Area', desc: 'Washroom, mess, or premises (Optional)' }
+  ];
 
-      {image ? (
-        <div className="relative rounded-2xl overflow-hidden border border-slate-200 group h-40 bg-slate-100">
-          <img 
-            src={image} 
-            alt="Property Preview" 
-            className="w-full h-full object-cover" 
-          />
-          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setImage('')}
-              className="px-3 py-1.5 bg-rose-600 text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-md hover:bg-rose-700 cursor-pointer"
-            >
-              <Trash2 size={13} /> Remove Photo
-            </button>
+  const fileInputRefs = [fileInputRef0, fileInputRef1, fileInputRef2];
+
+  const renderPhotoUploadSection = (title: string, subtitle?: string) => {
+    const validCount = images.filter(img => img && img.trim() !== '').length;
+
+    return (
+      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <label className="block font-bold text-slate-800 text-xs">
+                {title}
+              </label>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                validCount >= 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {validCount} of 3 Photos {validCount >= 1 ? '✓' : '(Min 1 Required)'}
+              </span>
+            </div>
+            {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
           </div>
         </div>
-      ) : (
-        <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition bg-emerald-50/40 hover:bg-emerald-50/80">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1.5">
-            <Upload size={18} />
-          </div>
-          <span className="font-bold text-slate-800 text-xs">
-            {isUploadingImage ? 'Uploading to Supabase Storage...' : 'Click or Tap to Upload Property Photo'}
-          </span>
-          <span className="text-[10px] text-slate-500 mt-0.5">
-            JPG, PNG, WebP up to 5MB (stored directly in Supabase Storage)
-          </span>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            disabled={isUploadingImage}
-            className="hidden"
-          />
-        </label>
-      )}
 
-      {uploadError && (
-        <div className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
-          <AlertCircle size={13} /> {uploadError}
+        {/* 3 Photo Slots Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[0, 1, 2].map(slotIdx => {
+            const slotImg = images[slotIdx];
+            const slotMeta = slotLabels[slotIdx];
+            const isUploading = uploadingSlot === slotIdx;
+            const slotError = uploadSlotErrors[slotIdx];
+
+            return (
+              <div 
+                key={slotIdx}
+                className="bg-white rounded-2xl border border-slate-200 p-2.5 flex flex-col justify-between shadow-xs min-h-[175px]"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-slate-800 truncate" title={slotMeta.title}>
+                    {slotIdx + 1}. {slotMeta.title}
+                  </span>
+                  {slotImg && (
+                    <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md shrink-0">
+                      ✓ Attached
+                    </span>
+                  )}
+                </div>
+
+                {slotImg ? (
+                  <div className="relative rounded-xl overflow-hidden group aspect-4/3 bg-slate-100 border border-slate-100">
+                    <img 
+                      src={slotImg} 
+                      alt={`Property Photo ${slotIdx + 1}`} 
+                      className="w-full h-full object-cover" 
+                    />
+                    <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 p-2">
+                      <button
+                        type="button"
+                        onClick={() => setCameraModalSlot(slotIdx)}
+                        className="px-2 py-1 bg-white/95 hover:bg-white text-slate-900 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer shadow-xs"
+                        title="Retake photo using live camera"
+                      >
+                        <Camera size={11} /> Retake
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRefs[slotIdx]?.current?.click()}
+                        className="px-2 py-1 bg-white/95 hover:bg-white text-slate-900 rounded-lg font-bold text-[10px] flex items-center gap-1 cursor-pointer shadow-xs"
+                        title="Choose another file"
+                      >
+                        <Upload size={11} /> Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSlotRemove(slotIdx)}
+                        className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg cursor-pointer shadow-xs"
+                        title="Remove photo"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col justify-center items-center text-center p-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-50 transition">
+                    {isUploading ? (
+                      <div className="py-4 text-center">
+                        <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-1.5" />
+                        <span className="text-[10px] font-semibold text-emerald-800">Uploading photo...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-slate-400 mb-2 leading-tight">
+                          {slotMeta.desc}
+                        </p>
+                        <div className="flex flex-col w-full gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setCameraModalSlot(slotIdx)}
+                            className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs transition cursor-pointer"
+                          >
+                            <Camera size={13} /> Take Photo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRefs[slotIdx]?.current?.click()}
+                            className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                          >
+                            <Upload size={12} /> Choose File
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Per-slot hidden file input */}
+                <input
+                  ref={fileInputRefs[slotIdx]}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleSlotFileUpload(f, slotIdx);
+                  }}
+                  className="hidden"
+                />
+
+                {slotError && (
+                  <div className="text-rose-600 text-[10px] mt-1 flex items-center gap-1 font-semibold">
+                    <AlertCircle size={11} /> {slotError}
+                  </div>
+                )}
+
+                {/* Direct Image URL input */}
+                <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                  <input
+                    type="url"
+                    placeholder="Or paste photo URL"
+                    value={slotImg || ''}
+                    onChange={e => handleSlotUrlChange(e.target.value, slotIdx)}
+                    className="w-full px-2 py-1 text-[10px] rounded-lg border border-slate-200"
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
-
-      {/* Direct Image URL input fallback */}
-      <div className="mt-1 flex items-center gap-2">
-        <span className="text-slate-500 text-[11px] shrink-0">Or Image URL:</span>
-        <input
-          type="url"
-          placeholder="https://images.unsplash.com/..."
-          value={image}
-          onChange={e => setImage(e.target.value)}
-          className="flex-1 px-2.5 py-1 text-xs rounded-xl border border-slate-300"
-        />
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -1176,9 +1315,9 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
               ) : (
                 <button
                   type="submit"
-                  disabled={!isAuthenticated || isUploadingImage}
+                  disabled={!isAuthenticated || uploadingSlot !== null}
                   className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer ${
-                    !isAuthenticated || isUploadingImage
+                    !isAuthenticated || uploadingSlot !== null
                       ? 'bg-slate-400 cursor-not-allowed opacity-70'
                       : 'bg-emerald-700 hover:bg-emerald-800'
                   }`}
@@ -1187,7 +1326,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   <span>
                     {!isAuthenticated
                       ? 'Sign In Required'
-                      : isUploadingImage
+                      : uploadingSlot !== null
                       ? 'Uploading Photo...'
                       : isEditMode
                       ? 'Save Changes'
@@ -1201,6 +1340,16 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         </form>
 
       </div>
+
+      {/* Live In-App Camera Viewfinder Modal */}
+      {cameraModalSlot !== null && (
+        <CameraCaptureModal
+          isOpen={true}
+          onClose={() => setCameraModalSlot(null)}
+          onCapture={(file) => handleSlotCameraCapture(file, cameraModalSlot)}
+          imageLabel={`Photo Slot ${cameraModalSlot + 1} (${slotLabels[cameraModalSlot]?.title || 'Property Photo'})`}
+        />
+      )}
     </div>
   );
 };

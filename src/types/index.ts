@@ -58,6 +58,7 @@ export interface Property {
   rules: string[];
   amenities: string[];
   image: string;
+  images?: string[];
   description?: string;
   ownerName?: string;
   isActive: boolean;
