@@ -31,6 +31,8 @@ import {
   syncRentRecordToSupabase,
   syncRentStatusToSupabase,
   syncComplaintStatusToSupabase,
+  syncPropertyStatusToSupabase,
+  syncRoomStatusToSupabase,
   generateUUID
 } from './services/store';
 import { supabase } from './services/supabase';
@@ -643,6 +645,30 @@ export function App() {
     }));
   };
 
+  // Toggle Property Active / Paused Status
+  const handleTogglePropertyStatus = (propertyId: string) => {
+    const prop = state.properties.find(p => p.id === propertyId);
+    if (!prop) return;
+    const nextStatus = !(prop.isActive ?? true);
+    syncPropertyStatusToSupabase(propertyId, nextStatus);
+    setState(prev => ({
+      ...prev,
+      properties: prev.properties.map(p => p.id === propertyId ? { ...p, isActive: nextStatus } : p)
+    }));
+  };
+
+  // Toggle Room Active / Paused Status
+  const handleToggleRoomStatus = (roomId: string) => {
+    const rm = state.rooms.find(r => r.id === roomId);
+    if (!rm) return;
+    const nextStatus = !(rm.isActive ?? true);
+    syncRoomStatusToSupabase(roomId, nextStatus);
+    setState(prev => ({
+      ...prev,
+      rooms: prev.rooms.map(r => r.id === roomId ? { ...r, isActive: nextStatus } : r)
+    }));
+  };
+
   // Save / Bookmark toggle
   const handleToggleSave = (propId: string) => {
     setState(prev => {
@@ -750,6 +776,7 @@ export function App() {
                       onOpenQuickRent={() => setCurrentTab('billing')}
                       onOpenMeterCalc={() => setCurrentTab('billing')}
                       onOpenAddProperty={handleOpenAddProperty}
+                      onTogglePropertyStatus={handleTogglePropertyStatus}
                     />
                   )}
 
@@ -762,6 +789,7 @@ export function App() {
                   onToggleBedStatus={handleToggleBedStatus}
                   onAddRoom={handleAddRoom}
                   onUpdateProperty={handleUpdateProperty}
+                  onToggleRoomStatus={handleToggleRoomStatus}
                 />
               )}
 

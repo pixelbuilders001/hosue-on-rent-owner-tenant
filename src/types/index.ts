@@ -36,6 +36,13 @@ export interface Property {
   area: string;
   city: string;
   landmark: string;
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+  distanceKm?: number;
+  commuteMinutes?: number;
+  stationDistanceKm?: number;
+  busStandDistanceKm?: number;
   totalBeds: number;
   availableBeds: number;
   baseRent: number;
@@ -51,7 +58,10 @@ export interface Property {
   rules: string[];
   amenities: string[];
   image: string;
+  description?: string;
+  ownerName?: string;
   isActive: boolean;
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
   createdAt: string;
 }
 
@@ -63,6 +73,7 @@ export interface Room {
   roomType: 'Single' | '2 Sharing' | '3 Sharing' | '4 Sharing';
   totalBeds: number;
   baseRent: number;
+  isActive?: boolean;
 }
 
 export interface Bed {

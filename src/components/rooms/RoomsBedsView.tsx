@@ -22,6 +22,7 @@ interface RoomsBedsViewProps {
   onToggleBedStatus: (bedId: string) => void;
   onAddRoom: (room: Omit<Room, 'id'>, bedCount: number) => void;
   onUpdateProperty: (updated: Property) => void;
+  onToggleRoomStatus?: (roomId: string) => void;
 }
 
 export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
@@ -31,7 +32,8 @@ export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
   language,
   onToggleBedStatus,
   onAddRoom,
-  onUpdateProperty
+  onUpdateProperty,
+  onToggleRoomStatus
 }) => {
   const [showAddRoomModal, setShowAddRoomModal] = useState(false);
   const [showEditPricingModal, setShowEditPricingModal] = useState(false);
@@ -155,11 +157,28 @@ export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
                 {/* Room Card Header */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base font-bold text-slate-900">Room {room.roomNumber}</span>
                       <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
                         Floor {room.floor}
                       </span>
+                      {onToggleRoomStatus && (
+                        <button
+                          type="button"
+                          onClick={() => onToggleRoomStatus(room.id)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer flex items-center gap-1 ${
+                            (room.isActive ?? true)
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          }`}
+                          title="Click to toggle room active/paused status in customer listing"
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            (room.isActive ?? true) ? 'bg-emerald-500' : 'bg-amber-500'
+                          }`} />
+                          {(room.isActive ?? true) ? 'Active' : 'Paused'}
+                        </button>
+                      )}
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">{room.roomType} Room</div>
                   </div>

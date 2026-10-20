@@ -126,6 +126,13 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         area: p.area,
         city: p.city,
         landmark: p.landmark || '',
+        pincode: p.pincode || '848101',
+        latitude: p.latitude ? Number(p.latitude) : undefined,
+        longitude: p.longitude ? Number(p.longitude) : undefined,
+        distanceKm: p.distance_km ? Number(p.distance_km) : 1.0,
+        commuteMinutes: p.commute_minutes ? Number(p.commute_minutes) : 5,
+        stationDistanceKm: p.station_distance_km ? Number(p.station_distance_km) : undefined,
+        busStandDistanceKm: p.bus_stand_distance_km ? Number(p.bus_stand_distance_km) : undefined,
         totalBeds: p.total_beds || 0,
         availableBeds: p.available_beds || 0,
         baseRent: p.rent,
@@ -141,7 +148,10 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         rules: p.rules || [],
         amenities: p.amenities || [],
         image: p.image || '',
-        isActive: p.is_active,
+        description: p.description || '',
+        ownerName: p.owner_name || '',
+        isActive: p.is_active ?? true,
+        verificationStatus: p.verification_status || 'pending',
         createdAt: p.created_at
       })),
       rooms: (roomsRes.data || []).map((r: any) => ({
@@ -151,7 +161,8 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         floor: r.floor || 1,
         roomType: r.accommodation,
         totalBeds: r.total_beds || 2,
-        baseRent: r.rent
+        baseRent: r.rent,
+        isActive: r.is_active ?? true
       })),
       beds: (bedsRes.data || []).map((b: any) => ({
         id: b.id,
@@ -270,12 +281,18 @@ export async function syncPropertyToSupabase(
       area: prop.area,
       address: prop.address || prop.area,
       landmark: prop.landmark || '',
-      distance_km: 1.0,
-      commute_minutes: 5,
+      pincode: prop.pincode || '848101',
+      latitude: prop.latitude ? Number(prop.latitude) : null,
+      longitude: prop.longitude ? Number(prop.longitude) : null,
+      distance_km: prop.distanceKm ? Number(prop.distanceKm) : 1.0,
+      commute_minutes: prop.commuteMinutes ? Number(prop.commuteMinutes) : 5,
+      station_distance_km: prop.stationDistanceKm ? Number(prop.stationDistanceKm) : null,
+      bus_stand_distance_km: prop.busStandDistanceKm ? Number(prop.busStandDistanceKm) : null,
       rating: 5.0,
       review_count: 0,
-      verified: true,
-      verification_level: 'Gold',
+      verified: prop.verificationStatus === 'verified',
+      verification_level: prop.verificationStatus === 'verified' ? 'Gold' : 'Pending',
+      verification_status: prop.verificationStatus || 'pending',
       rent: Number(prop.baseRent) || 0,
       deposit: Number(prop.deposit) || 0,
       brokerage: Number(prop.brokerage) || 0,
@@ -295,11 +312,11 @@ export async function syncPropertyToSupabase(
       amenities: prop.amenities || [],
       image: prop.image || '',
       color: '#176b58',
-      description: `${prop.name} located in ${prop.area}, ${prop.city}. ${prop.landmark || ''}`,
-      owner_name: prop.name || 'RoomSaathi Landlord',
+      description: prop.description || `${prop.name} located in ${prop.area}, ${prop.city}. ${prop.landmark || ''}`,
+      owner_name: prop.ownerName || prop.name || 'RoomSaathi Landlord',
       rules: prop.rules || [],
       updated_label: 'Just now',
-      is_active: true
+      is_active: prop.isActive ?? true
     });
 
     if (propErr) {
@@ -315,7 +332,8 @@ export async function syncPropertyToSupabase(
         accommodation: r.roomType,
         rent: Number(r.baseRent) || 0,
         floor: Number(r.floor) || 1,
-        total_beds: Number(r.totalBeds) || 2
+        total_beds: Number(r.totalBeds) || 2,
+        is_active: r.isActive ?? true
       })));
       if (roomsErr) console.error('Error inserting rooms:', roomsErr);
     }
@@ -340,6 +358,24 @@ export async function syncPropertyToSupabase(
   }
 }
 
+export async function syncPropertyStatusToSupabase(propertyId: string, isActive: boolean) {
+  if (!supabase) return;
+  try {
+    await supabase.from('properties').update({ is_active: isActive }).eq('id', propertyId);
+  } catch (e) {
+    console.error('Failed to sync property status to Supabase', e);
+  }
+}
+
+export async function syncRoomStatusToSupabase(roomId: string, isActive: boolean) {
+  if (!supabase) return;
+  try {
+    await supabase.from('rooms').update({ is_active: isActive }).eq('id', roomId);
+  } catch (e) {
+    console.error('Failed to sync room status to Supabase', e);
+  }
+}
+
 export async function syncRoomToSupabase(room: Room, beds: Bed[]) {
   if (!supabase) return;
   try {
@@ -350,7 +386,8 @@ export async function syncRoomToSupabase(room: Room, beds: Bed[]) {
       accommodation: room.roomType,
       rent: Number(room.baseRent) || 0,
       floor: Number(room.floor) || 1,
-      total_beds: Number(room.totalBeds) || 2
+      total_beds: Number(room.totalBeds) || 2,
+      is_active: room.isActive ?? true
     });
 
     if (beds.length > 0) {

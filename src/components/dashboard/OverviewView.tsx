@@ -33,6 +33,7 @@ interface OverviewViewProps {
   onOpenQuickRent: () => void;
   onOpenMeterCalc: () => void;
   onOpenAddProperty?: () => void;
+  onTogglePropertyStatus?: (propertyId: string) => void;
 }
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
@@ -48,7 +49,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onToggleBedStatus,
   onOpenQuickRent,
   onOpenMeterCalc,
-  onOpenAddProperty
+  onOpenAddProperty,
+  onTogglePropertyStatus
 }) => {
   if (!property) {
     return (
@@ -112,15 +114,53 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="flex items-center gap-2 text-emerald-200 text-xs font-semibold tracking-wider uppercase mb-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              {property.city} · {property.area}
+            <div className="flex flex-wrap items-center gap-2 text-emerald-200 text-xs font-semibold tracking-wider uppercase mb-1">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                {property.city} · {property.area} {property.pincode ? `(${property.pincode})` : ''}
+              </span>
+
+              {/* Status Badge */}
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-normal uppercase flex items-center gap-1 ${
+                property.isActive 
+                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40' 
+                  : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${property.isActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                {property.isActive ? 'Live & Searchable' : 'Draft / Paused'}
+              </span>
+
+              {/* Transit Distances */}
+              <span className="px-2 py-0.5 rounded-lg bg-black/20 text-emerald-100/90 text-[10px] font-normal tracking-normal lowercase flex items-center gap-2">
+                <span>🚆 {property.stationDistanceKm || property.distanceKm || '1.0'} km stn</span>
+                <span>🚌 {property.busStandDistanceKm || (Number(property.distanceKm || 1.0) + 0.2).toFixed(1)} km bus</span>
+              </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-              {property.name}
-            </h1>
+
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                {property.name}
+              </h1>
+
+              {/* Owner Pause/Resume Listing Toggle */}
+              {onTogglePropertyStatus && (
+                <button
+                  type="button"
+                  onClick={() => onTogglePropertyStatus(property.id)}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition ${
+                    property.isActive
+                      ? 'bg-white/10 hover:bg-white/20 text-emerald-100 border-white/20'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-sm'
+                  }`}
+                  title="Toggle property visibility on student search"
+                >
+                  {property.isActive ? 'Pause Listing' : 'Make Live'}
+                </button>
+              )}
+            </div>
+
             <p className="text-emerald-100/80 text-xs sm:text-sm mt-1 max-w-xl">
-              {property.address} ({property.landmark})
+              {property.address} {property.landmark ? `· Landmark: ${property.landmark}` : ''}
             </p>
           </div>
 
