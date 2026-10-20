@@ -260,9 +260,46 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     setCustomRule('');
   };
 
+  // Step Navigation
+  const handleNextTab = () => {
+    if (activeTab === 'basic') {
+      if (!name.trim() || !address.trim()) {
+        alert("Please enter Property Name and Address before proceeding.");
+        return;
+      }
+      setActiveTab('pricing');
+    } else if (activeTab === 'pricing') {
+      setActiveTab('amenities');
+    } else if (activeTab === 'amenities') {
+      setActiveTab('media');
+    }
+  };
+
+  const handlePrevTab = () => {
+    if (activeTab === 'media') setActiveTab('amenities');
+    else if (activeTab === 'amenities') setActiveTab('pricing');
+    else if (activeTab === 'pricing') setActiveTab('basic');
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      if (target.tagName !== 'TEXTAREA') {
+        e.preventDefault(); // Stop accidental submit when pressing Enter in inputs
+      }
+    }
+  };
+
   // Form Submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Guard: Never submit prematurely before the final step
+    if (activeTab !== 'media') {
+      handleNextTab();
+      return;
+    }
+
     if (!isAuthenticated || !currentUserId) {
       if (onRequireAuth) onRequireAuth();
       return;
@@ -352,6 +389,81 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     onClose();
   };
 
+  // Reusable Photo Upload UI
+  const renderPhotoUploadSection = (title: string, subtitle?: string) => (
+    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="block font-bold text-slate-800 text-xs">
+            {title}
+          </label>
+          {subtitle && <p className="text-[10px] text-slate-500">{subtitle}</p>}
+        </div>
+        {image && (
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+            <Check size={10} /> Photo Attached
+          </span>
+        )}
+      </div>
+
+      {image ? (
+        <div className="relative rounded-2xl overflow-hidden border border-slate-200 group h-40 bg-slate-100">
+          <img 
+            src={image} 
+            alt="Property Preview" 
+            className="w-full h-full object-cover" 
+          />
+          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImage('')}
+              className="px-3 py-1.5 bg-rose-600 text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-md hover:bg-rose-700 cursor-pointer"
+            >
+              <Trash2 size={13} /> Remove Photo
+            </button>
+          </div>
+        </div>
+      ) : (
+        <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition bg-emerald-50/40 hover:bg-emerald-50/80">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1.5">
+            <Upload size={18} />
+          </div>
+          <span className="font-bold text-slate-800 text-xs">
+            {isUploadingImage ? 'Uploading to Supabase Storage...' : 'Click or Tap to Upload Property Photo'}
+          </span>
+          <span className="text-[10px] text-slate-500 mt-0.5">
+            JPG, PNG, WebP up to 5MB (stored directly in Supabase Storage)
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            disabled={isUploadingImage}
+            className="hidden"
+          />
+        </label>
+      )}
+
+      {uploadError && (
+        <div className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
+          <AlertCircle size={13} /> {uploadError}
+        </div>
+      )}
+
+      {/* Direct Image URL input fallback */}
+      <div className="mt-1 flex items-center gap-2">
+        <span className="text-slate-500 text-[11px] shrink-0">Or Image URL:</span>
+        <input
+          type="url"
+          placeholder="https://images.unsplash.com/..."
+          value={image}
+          onChange={e => setImage(e.target.value)}
+          className="flex-1 px-2.5 py-1 text-xs rounded-xl border border-slate-300"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-6 max-h-[92vh] flex flex-col">
@@ -402,56 +514,104 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1.5 border-b border-slate-100 pt-3 pb-1 overflow-x-auto shrink-0 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setActiveTab('basic')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              activeTab === 'basic'
-                ? 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            1. Basic & Location
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('pricing')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              activeTab === 'pricing'
-                ? 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            2. Pricing & Utilities
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('amenities')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              activeTab === 'amenities'
-                ? 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            3. Amenities & Rules
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('media')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              activeTab === 'media'
-                ? 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            4. Photos & Rooms
-          </button>
+        {/* Step Progress Bar & Tab Stepper */}
+        <div className="pt-2.5 pb-1 shrink-0 border-b border-slate-100">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1.5">
+            <span className="text-slate-800">
+              {activeTab === 'basic' && 'Step 1 of 4: Basic Details & Location'}
+              {activeTab === 'pricing' && 'Step 2 of 4: Pricing & Utilities'}
+              {activeTab === 'amenities' && 'Step 3 of 4: Amenities & House Rules'}
+              {activeTab === 'media' && 'Step 4 of 4: Photos, Rooms & Finish'}
+            </span>
+            <span className="text-emerald-700 font-extrabold">
+              {activeTab === 'basic' && '25%'}
+              {activeTab === 'pricing' && '50%'}
+              {activeTab === 'amenities' && '75%'}
+              {activeTab === 'media' && '100%'}
+            </span>
+          </div>
+
+          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
+            <div 
+              className="bg-emerald-600 h-full transition-all duration-300 rounded-full"
+              style={{
+                width: 
+                  activeTab === 'basic' ? '25%' :
+                  activeTab === 'pricing' ? '50%' :
+                  activeTab === 'amenities' ? '75%' : '100%'
+              }}
+            />
+          </div>
+
+          {/* Tab Navigation buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setActiveTab('basic')}
+              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
+                activeTab === 'basic'
+                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              1. Basic & Photo
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!name.trim() || !address.trim()) {
+                  alert("Please enter Property Name and Address first.");
+                  return;
+                }
+                setActiveTab('pricing');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
+                activeTab === 'pricing'
+                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              2. Pricing
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!name.trim() || !address.trim()) {
+                  alert("Please enter Property Name and Address first.");
+                  return;
+                }
+                setActiveTab('amenities');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
+                activeTab === 'amenities'
+                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              3. Amenities
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!name.trim() || !address.trim()) {
+                  alert("Please enter Property Name and Address first.");
+                  return;
+                }
+                setActiveTab('media');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
+                activeTab === 'media'
+                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              4. Photos & Rooms
+            </button>
+          </div>
         </div>
 
         {/* Form Container */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pt-3.5 pb-2 text-xs space-y-4">
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex-1 overflow-y-auto pt-3.5 pb-2 text-xs space-y-4">
           
           {/* TAB 1: BASIC & LOCATION */}
           {activeTab === 'basic' && (
@@ -629,6 +789,12 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+
+              {/* Photo Upload (Available in Step 1 & Step 4) */}
+              {renderPhotoUploadSection(
+                'Property Cover Photo (Supabase Storage)',
+                'Upload directly from your device camera/gallery or paste an image link'
+              )}
             </div>
           )}
 
@@ -820,12 +986,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     placeholder="Add custom amenity (e.g. Badminton Court)"
                     value={customAmenity}
                     onChange={e => setCustomAmenity(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddCustomAmenity();
+                      }
+                    }}
                     className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300"
                   />
                   <button
                     type="button"
                     onClick={handleAddCustomAmenity}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
                   >
                     Add
                   </button>
@@ -864,12 +1037,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     placeholder="Add custom rule (e.g. Non-veg cooking strictly prohibited)"
                     value={customRule}
                     onChange={e => setCustomRule(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddCustomRule();
+                      }
+                    }}
                     className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300"
                   />
                   <button
                     type="button"
                     onClick={handleAddCustomRule}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
                   >
                     Add
                   </button>
@@ -878,72 +1058,15 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: PHOTOS & ROOMS */}
+          {/* TAB 4: PHOTOS, ROOMS & REVIEW */}
           {activeTab === 'media' && (
             <div className="space-y-4">
               
-              {/* Photo Upload Box */}
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Property Photos (Supabase Cloud Storage)
-                </label>
-
-                {image ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-slate-200 group h-44 bg-slate-100">
-                    <img 
-                      src={image} 
-                      alt="Property Preview" 
-                      className="w-full h-full object-cover" 
-                    />
-                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setImage('')}
-                        className="px-3 py-1.5 bg-rose-600 text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-md"
-                      >
-                        <Trash2 size={13} /> Remove Photo
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition bg-emerald-50/40 hover:bg-emerald-50/80">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
-                      <Upload size={22} />
-                    </div>
-                    <span className="font-bold text-slate-800 text-xs">
-                      {isUploadingImage ? 'Uploading to Supabase Storage...' : 'Click to Upload Real Property Photo'}
-                    </span>
-                    <span className="text-[11px] text-slate-500 mt-0.5">
-                      JPG, PNG, WebP up to 5MB (stored in property-images bucket)
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      disabled={isUploadingImage}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-
-                {uploadError && (
-                  <div className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
-                    <AlertCircle size={13} /> {uploadError}
-                  </div>
-                )}
-
-                {/* Direct Image URL input fallback */}
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-slate-500 text-[11px]">Or Image URL:</span>
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={image}
-                    onChange={e => setImage(e.target.value)}
-                    className="flex-1 px-2.5 py-1 text-xs rounded-xl border border-slate-300"
-                  />
-                </div>
-              </div>
+              {/* Photo Upload & Verification */}
+              {renderPhotoUploadSection(
+                'Property Cover Photo & Media Preview',
+                'Verify or update the photo displayed to prospective students and tenants'
+              )}
 
               {/* Initial Rooms Configuration / Existing Inventory Note */}
               {isEditMode ? (
@@ -1022,7 +1145,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer"
             >
               Cancel
             </button>
@@ -1031,34 +1154,30 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
               {activeTab !== 'basic' && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const tabs: Array<'basic' | 'pricing' | 'amenities' | 'media'> = ['basic', 'pricing', 'amenities', 'media'];
-                    const idx = tabs.indexOf(activeTab);
-                    if (idx > 0) setActiveTab(tabs[idx - 1]);
-                  }}
-                  className="px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition"
+                  onClick={handlePrevTab}
+                  className="px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer"
                 >
-                  Back
+                  ← Back
                 </button>
               )}
 
               {activeTab !== 'media' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    const tabs: Array<'basic' | 'pricing' | 'amenities' | 'media'> = ['basic', 'pricing', 'amenities', 'media'];
-                    const idx = tabs.indexOf(activeTab);
-                    if (idx < tabs.length - 1) setActiveTab(tabs[idx + 1]);
-                  }}
-                  className="px-4 py-2 font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs"
+                  onClick={handleNextTab}
+                  className="px-4 py-2 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs text-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  Next Step →
+                  <span>
+                    {activeTab === 'basic' && 'Next: Pricing & Utilities →'}
+                    {activeTab === 'pricing' && 'Next: Amenities & Rules →'}
+                    {activeTab === 'amenities' && 'Next: Rooms & Final Review (Step 4) →'}
+                  </span>
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={!isAuthenticated || isUploadingImage}
-                  className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 ${
+                  className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer ${
                     !isAuthenticated || isUploadingImage
                       ? 'bg-slate-400 cursor-not-allowed opacity-70'
                       : 'bg-emerald-700 hover:bg-emerald-800'
@@ -1068,6 +1187,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   <span>
                     {!isAuthenticated
                       ? 'Sign In Required'
+                      : isUploadingImage
+                      ? 'Uploading Photo...'
                       : isEditMode
                       ? 'Save Changes'
                       : 'Publish Property'}
