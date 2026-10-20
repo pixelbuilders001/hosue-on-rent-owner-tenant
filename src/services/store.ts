@@ -358,6 +358,57 @@ export async function syncPropertyToSupabase(
   }
 }
 
+export async function syncUpdatePropertyToSupabase(prop: Property): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error: propErr } = await supabase.from('properties').update({
+      name: prop.name,
+      type: prop.type,
+      city: prop.city,
+      area: prop.area,
+      address: prop.address || prop.area,
+      landmark: prop.landmark || '',
+      pincode: prop.pincode || '848101',
+      latitude: prop.latitude ? Number(prop.latitude) : null,
+      longitude: prop.longitude ? Number(prop.longitude) : null,
+      distance_km: prop.distanceKm ? Number(prop.distanceKm) : 1.0,
+      commute_minutes: prop.commuteMinutes ? Number(prop.commuteMinutes) : 5,
+      station_distance_km: prop.stationDistanceKm ? Number(prop.stationDistanceKm) : null,
+      bus_stand_distance_km: prop.busStandDistanceKm ? Number(prop.busStandDistanceKm) : null,
+      rent: Number(prop.baseRent) || 0,
+      deposit: Number(prop.deposit) || 0,
+      brokerage: Number(prop.brokerage) || 0,
+      electricity: Number(prop.electricityRate) || 0,
+      electricity_type: prop.electricityType,
+      electricity_rate: Number(prop.electricityRate) || 0,
+      wifi_cost: Number(prop.wifiCost) || 0,
+      maintenance: Number(prop.maintenance) || 0,
+      food_cost: Number(prop.foodCost) || 0,
+      food_available: Boolean(prop.foodAvailable),
+      food_included: Boolean(prop.foodIncluded),
+      wifi: prop.amenities.includes('WiFi') || prop.amenities.includes('High Speed WiFi'),
+      electricity_included: prop.electricityType === 'included',
+      amenities: prop.amenities || [],
+      image: prop.image || '',
+      description: prop.description,
+      owner_name: prop.ownerName || 'Host',
+      rules: prop.rules || [],
+      updated_label: 'Recently updated',
+      is_active: prop.isActive ?? true,
+      verification_status: prop.verificationStatus || 'pending'
+    }).eq('id', prop.id);
+
+    if (propErr) {
+      console.error('Failed to update property in Supabase:', propErr);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to sync updated property to Supabase', err);
+    return false;
+  }
+}
+
 export async function syncPropertyStatusToSupabase(propertyId: string, isActive: boolean) {
   if (!supabase) return;
   try {

@@ -33,6 +33,7 @@ import {
   syncComplaintStatusToSupabase,
   syncPropertyStatusToSupabase,
   syncRoomStatusToSupabase,
+  syncUpdatePropertyToSupabase,
   generateUUID
 } from './services/store';
 import { supabase } from './services/supabase';
@@ -65,6 +66,7 @@ export function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedReceiptRecord, setSelectedReceiptRecord] = useState<RentRecord | null>(null);
   const [selectedTenantProperty, setSelectedTenantProperty] = useState<Property | null>(null);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   // Sync to localStorage on every state change
   useEffect(() => {
@@ -314,11 +316,12 @@ export function App() {
   };
 
   // Update Property details
-  const handleUpdateProperty = (updated: Property) => {
+  const handleUpdateProperty = async (updated: Property) => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
+    await syncUpdatePropertyToSupabase(updated);
     setState(prev => ({
       ...prev,
       properties: prev.properties.map(p => p.id === updated.id ? updated : p)
@@ -777,6 +780,7 @@ export function App() {
                       onOpenMeterCalc={() => setCurrentTab('billing')}
                       onOpenAddProperty={handleOpenAddProperty}
                       onTogglePropertyStatus={handleTogglePropertyStatus}
+                      onEditProperty={(prop) => setEditingProperty(prop)}
                     />
                   )}
 
@@ -930,6 +934,19 @@ export function App() {
         <AddPropertyModal
           onClose={() => setShowAddPropertyModal(false)}
           onAddProperty={handleAddProperty}
+          isAuthenticated={isAuthenticated}
+          currentUserId={currentUserId}
+          ownerName={state.profile.fullName}
+          onRequireAuth={() => setShowAuthModal(true)}
+        />
+      )}
+
+      {editingProperty && (
+        <AddPropertyModal
+          initialProperty={editingProperty}
+          onClose={() => setEditingProperty(null)}
+          onAddProperty={handleAddProperty}
+          onUpdateProperty={handleUpdateProperty}
           isAuthenticated={isAuthenticated}
           currentUserId={currentUserId}
           ownerName={state.profile.fullName}

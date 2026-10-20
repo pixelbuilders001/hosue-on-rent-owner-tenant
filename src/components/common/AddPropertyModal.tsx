@@ -28,6 +28,8 @@ import { uploadPropertyImage } from '../../services/storageService';
 interface AddPropertyModalProps {
   onClose: () => void;
   onAddProperty: (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => void;
+  onUpdateProperty?: (updated: Property) => void;
+  initialProperty?: Property | null;
   isAuthenticated: boolean;
   currentUserId: string;
   ownerName?: string;
@@ -63,62 +65,65 @@ const DEFAULT_RULE_PRESETS = [
 export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   onClose,
   onAddProperty,
+  onUpdateProperty,
+  initialProperty,
   isAuthenticated,
   currentUserId,
   ownerName,
   onRequireAuth
 }) => {
+  const isEditMode = Boolean(initialProperty);
   const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'amenities' | 'media'>('basic');
 
   // Basic details
-  const [name, setName] = useState('');
-  const [type, setType] = useState<Property['type']>('PG');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(initialProperty?.name || '');
+  const [type, setType] = useState<Property['type']>(initialProperty?.type || 'PG');
+  const [description, setDescription] = useState(initialProperty?.description || '');
   
   // Location
-  const [city, setCity] = useState('Samastipur');
-  const [area, setArea] = useState('Station Road');
-  const [pincode, setPincode] = useState('848101');
-  const [address, setAddress] = useState('');
-  const [landmark, setLandmark] = useState('');
-  const [latitude, setLatitude] = useState<number | undefined>(undefined);
-  const [longitude, setLongitude] = useState<number | undefined>(undefined);
+  const [city, setCity] = useState(initialProperty?.city || 'Samastipur');
+  const [area, setArea] = useState(initialProperty?.area || 'Station Road');
+  const [pincode, setPincode] = useState(initialProperty?.pincode || '848101');
+  const [address, setAddress] = useState(initialProperty?.address || '');
+  const [landmark, setLandmark] = useState(initialProperty?.landmark || '');
+  const [latitude, setLatitude] = useState<number | undefined>(initialProperty?.latitude);
+  const [longitude, setLongitude] = useState<number | undefined>(initialProperty?.longitude);
 
   // Distances
-  const [stationDistanceKm, setStationDistanceKm] = useState(1.0);
-  const [busStandDistanceKm, setBusStandDistanceKm] = useState(1.2);
-  const [primaryDistanceKm, setPrimaryDistanceKm] = useState(1.0);
-  const [commuteMinutes, setCommuteMinutes] = useState(5);
+  const [stationDistanceKm, setStationDistanceKm] = useState(initialProperty?.stationDistanceKm || 1.0);
+  const [busStandDistanceKm, setBusStandDistanceKm] = useState(initialProperty?.busStandDistanceKm || 1.2);
+  const [primaryDistanceKm, setPrimaryDistanceKm] = useState(initialProperty?.distanceKm || 1.0);
+  const [commuteMinutes, setCommuteMinutes] = useState(initialProperty?.commuteMinutes || 5);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   // Pricing & Utilities
-  const [baseRent, setBaseRent] = useState(4000);
-  const [deposit, setDeposit] = useState(4000);
-  const [brokerage, setBrokerage] = useState(0);
-  const [maintenance, setMaintenance] = useState(100);
-  const [electricityType, setElectricityType] = useState<Property['electricityType']>('meter_unit');
-  const [electricityRate, setElectricityRate] = useState(9);
-  const [wifiCost, setWifiCost] = useState(150);
-  const [foodAvailable, setFoodAvailable] = useState(false);
-  const [foodIncluded, setFoodIncluded] = useState(false);
-  const [foodCost, setFoodCost] = useState(2200);
+  const [baseRent, setBaseRent] = useState(initialProperty?.baseRent || 4000);
+  const [deposit, setDeposit] = useState(initialProperty?.deposit || 4000);
+  const [brokerage, setBrokerage] = useState(initialProperty?.brokerage || 0);
+  const [maintenance, setMaintenance] = useState(initialProperty?.maintenance || 100);
+  const [electricityType, setElectricityType] = useState<Property['electricityType']>(initialProperty?.electricityType || 'meter_unit');
+  const [electricityRate, setElectricityRate] = useState(initialProperty?.electricityRate || 9);
+  const [wifiCost, setWifiCost] = useState(initialProperty?.wifiCost || 150);
+  const [foodAvailable, setFoodAvailable] = useState(initialProperty?.foodAvailable || false);
+  const [foodIncluded, setFoodIncluded] = useState(initialProperty?.foodIncluded || false);
+  const [foodCost, setFoodCost] = useState(initialProperty?.foodCost || 2200);
 
   // Amenities & Rules
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(initialProperty?.amenities || [
     'High Speed WiFi',
     'RO Drinking Water',
     '24x7 Power Backup',
     'Daily Cleaning'
   ]);
   const [customAmenity, setCustomAmenity] = useState('');
-  const [rules, setRules] = useState<string[]>([
+  const [rules, setRules] = useState<string[]>(initialProperty?.rules || [
     'Gate closes at 10:30 PM',
     'Strictly no smoking or alcohol on premises'
   ]);
   const [customRule, setCustomRule] = useState('');
 
   // Media & Storage
-  const [image, setImage] = useState('');
+  const [image, setImage] = useState(initialProperty?.image || '');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
@@ -127,8 +132,43 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   const [initialRoomType, setInitialRoomType] = useState<'Single' | '2 Sharing' | '3 Sharing'>('2 Sharing');
 
   // Status & Moderation
-  const [isActive, setIsActive] = useState(true);
-  const [verificationStatus, setVerificationStatus] = useState<Property['verificationStatus']>('pending');
+  const [isActive, setIsActive] = useState(initialProperty ? (initialProperty.isActive ?? true) : true);
+  const [verificationStatus, setVerificationStatus] = useState<Property['verificationStatus']>(initialProperty?.verificationStatus || 'pending');
+
+  // Populate on initialProperty change
+  useEffect(() => {
+    if (initialProperty) {
+      setName(initialProperty.name || '');
+      setType(initialProperty.type || 'PG');
+      setDescription(initialProperty.description || '');
+      setCity(initialProperty.city || 'Samastipur');
+      setArea(initialProperty.area || 'Station Road');
+      setPincode(initialProperty.pincode || '848101');
+      setAddress(initialProperty.address || '');
+      setLandmark(initialProperty.landmark || '');
+      setLatitude(initialProperty.latitude);
+      setLongitude(initialProperty.longitude);
+      setStationDistanceKm(initialProperty.stationDistanceKm || 1.0);
+      setBusStandDistanceKm(initialProperty.busStandDistanceKm || 1.2);
+      setPrimaryDistanceKm(initialProperty.distanceKm || 1.0);
+      setCommuteMinutes(initialProperty.commuteMinutes || 5);
+      setBaseRent(initialProperty.baseRent || 4000);
+      setDeposit(initialProperty.deposit || 4000);
+      setBrokerage(initialProperty.brokerage || 0);
+      setMaintenance(initialProperty.maintenance || 100);
+      setElectricityType(initialProperty.electricityType || 'meter_unit');
+      setElectricityRate(initialProperty.electricityRate || 9);
+      setWifiCost(initialProperty.wifiCost || 150);
+      setFoodAvailable(initialProperty.foodAvailable || false);
+      setFoodIncluded(initialProperty.foodIncluded || false);
+      setFoodCost(initialProperty.foodCost || 2200);
+      setSelectedAmenities(initialProperty.amenities || []);
+      setRules(initialProperty.rules || []);
+      setImage(initialProperty.image || '');
+      setIsActive(initialProperty.isActive ?? true);
+      setVerificationStatus(initialProperty.verificationStatus || 'pending');
+    }
+  }, [initialProperty]);
 
   // Auto-calculate distances when pincode or area changes
   useEffect(() => {
@@ -233,6 +273,43 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       return;
     }
 
+    if (isEditMode && initialProperty && onUpdateProperty) {
+      onUpdateProperty({
+        ...initialProperty,
+        name,
+        type,
+        address,
+        area,
+        city,
+        landmark: landmark || initialProperty.landmark,
+        pincode,
+        latitude,
+        longitude,
+        distanceKm: primaryDistanceKm,
+        commuteMinutes,
+        stationDistanceKm,
+        busStandDistanceKm,
+        baseRent: Number(baseRent),
+        deposit: Number(deposit),
+        brokerage: Number(brokerage),
+        electricityType,
+        electricityRate: Number(electricityRate),
+        wifiCost: Number(wifiCost),
+        maintenance: Number(maintenance),
+        foodAvailable,
+        foodIncluded,
+        foodCost: foodAvailable ? Number(foodCost) : 0,
+        rules,
+        amenities: selectedAmenities,
+        image: image || initialProperty.image,
+        description: description || initialProperty.description,
+        isActive,
+        verificationStatus
+      });
+      onClose();
+      return;
+    }
+
     const bedsPerRoom = initialRoomType === 'Single' ? 1 : initialRoomType === '2 Sharing' ? 2 : 3;
     const totalBeds = initialRooms * bedsPerRoom;
 
@@ -287,10 +364,12 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-slate-900 text-base leading-tight">
-                Add New Property / Hostel
+                {isEditMode ? 'Edit Property Details' : 'Add New Property / Hostel'}
               </h3>
               <p className="text-[11px] text-slate-500">
-                Configure listing details, image uploads, and transit distances
+                {isEditMode 
+                  ? `Update information, amenities, rules, and pricing for ${initialProperty?.name}`
+                  : 'Configure listing details, image uploads, and transit distances'}
               </p>
             </div>
           </div>
@@ -866,43 +945,52 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 </div>
               </div>
 
-              {/* Initial Rooms Configuration */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <label className="block font-bold text-slate-800 text-xs">
-                  Initial Room & Bed Configuration
-                </label>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Number of Initial Rooms</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={initialRooms}
-                      onChange={e => setInitialRooms(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-sm rounded-xl border border-slate-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Room Sharing Type</label>
-                    <select
-                      value={initialRoomType}
-                      onChange={e => setInitialRoomType(e.target.value as any)}
-                      className="w-full px-3 py-1.5 text-sm rounded-xl border border-slate-300 bg-white"
-                    >
-                      <option value="Single">Single (1 Bed per room)</option>
-                      <option value="2 Sharing">2 Sharing (2 Beds per room)</option>
-                      <option value="3 Sharing">3 Sharing (3 Beds per room)</option>
-                    </select>
-                  </div>
+              {/* Initial Rooms Configuration / Existing Inventory Note */}
+              {isEditMode ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="font-bold text-slate-800 text-xs mb-1">Room & Bed Inventory</div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    This property currently has rooms and beds configured. To add new rooms, adjust floor allocations, or update individual bed vacancy status, use the <strong>Rooms & Beds</strong> tab directly.
+                  </p>
                 </div>
+              ) : (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <label className="block font-bold text-slate-800 text-xs">
+                    Initial Room & Bed Configuration
+                  </label>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Number of Initial Rooms</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={initialRooms}
+                        onChange={e => setInitialRooms(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 text-sm rounded-xl border border-slate-300"
+                      />
+                    </div>
 
-                <p className="text-[10px] text-slate-400">
-                  Auto-creates rooms (Room 101, 102...) with bed labels (Bed A, Bed B). You can add and configure more rooms anytime from the Rooms & Inventory tab.
-                </p>
-              </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Room Sharing Type</label>
+                      <select
+                        value={initialRoomType}
+                        onChange={e => setInitialRoomType(e.target.value as any)}
+                        className="w-full px-3 py-1.5 text-sm rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="Single">Single (1 Bed per room)</option>
+                        <option value="2 Sharing">2 Sharing (2 Beds per room)</option>
+                        <option value="3 Sharing">3 Sharing (3 Beds per room)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400">
+                    Auto-creates rooms (Room 101, 102...) with bed labels (Bed A, Bed B). You can add and configure more rooms anytime from the Rooms & Inventory tab.
+                  </p>
+                </div>
+              )}
 
               {/* Moderation / Active Status Toggle */}
               <div className="p-3.5 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl flex items-center justify-between">
@@ -976,8 +1064,14 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                       : 'bg-emerald-700 hover:bg-emerald-800'
                   }`}
                 >
-                  <Plus size={15} />
-                  <span>{isAuthenticated ? 'Publish Property' : 'Sign In Required'}</span>
+                  {isEditMode ? <Check size={15} /> : <Plus size={15} />}
+                  <span>
+                    {!isAuthenticated
+                      ? 'Sign In Required'
+                      : isEditMode
+                      ? 'Save Changes'
+                      : 'Publish Property'}
+                  </span>
                 </button>
               )}
             </div>

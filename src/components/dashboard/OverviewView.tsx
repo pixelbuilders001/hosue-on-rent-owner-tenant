@@ -13,7 +13,8 @@ import {
   Zap, 
   CheckCircle2,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Edit3
 } from 'lucide-react';
 import { Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, Language } from '../../types';
 import { t } from '../../services/i18n';
@@ -34,6 +35,7 @@ interface OverviewViewProps {
   onOpenMeterCalc: () => void;
   onOpenAddProperty?: () => void;
   onTogglePropertyStatus?: (propertyId: string) => void;
+  onEditProperty?: (property: Property) => void;
 }
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
@@ -50,7 +52,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   onOpenQuickRent,
   onOpenMeterCalc,
   onOpenAddProperty,
-  onTogglePropertyStatus
+  onTogglePropertyStatus,
+  onEditProperty
 }) => {
   if (!property) {
     return (
@@ -137,17 +140,30 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                 {property.name}
               </h1>
+
+              {/* Owner Edit Property Details Button */}
+              {onEditProperty && (
+                <button
+                  type="button"
+                  onClick={() => onEditProperty(property)}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-100 border border-white/20 transition cursor-pointer shadow-xs"
+                  title="Edit property details, amenities, rules, and pricing"
+                >
+                  <Edit3 size={13} />
+                  <span>Edit Details</span>
+                </button>
+              )}
 
               {/* Owner Pause/Resume Listing Toggle */}
               {onTogglePropertyStatus && (
                 <button
                   type="button"
                   onClick={() => onTogglePropertyStatus(property.id)}
-                  className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition ${
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition cursor-pointer ${
                     property.isActive
                       ? 'bg-white/10 hover:bg-white/20 text-emerald-100 border-white/20'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-sm'
@@ -166,16 +182,25 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
           {/* Quick Action Buttons */}
           <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 w-full sm:w-auto">
+            {onEditProperty && (
+              <button
+                onClick={() => onEditProperty(property)}
+                className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition cursor-pointer"
+              >
+                <Edit3 size={15} className="text-emerald-200 shrink-0" />
+                <span>Edit Property</span>
+              </button>
+            )}
             <button
               onClick={onOpenMeterCalc}
-              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition cursor-pointer"
             >
               <Zap size={15} className="text-amber-300 shrink-0" />
               <span>{t(language, 'calculateMeter')}</span>
             </button>
             <button
               onClick={onOpenQuickRent}
-              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition cursor-pointer"
             >
               <IndianRupee size={15} className="text-emerald-700 shrink-0" />
               <span>{t(language, 'recordRent')}</span>
