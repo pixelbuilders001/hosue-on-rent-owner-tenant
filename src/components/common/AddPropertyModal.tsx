@@ -21,7 +21,12 @@ import {
   Zap,
   Trash2,
   Navigation,
-  Camera
+  Camera,
+  CheckCircle2,
+  Info,
+  ChevronRight,
+  ArrowRight,
+  BedDouble
 } from 'lucide-react';
 import { calculateTransitDistances, getLiveDeviceCoordinates } from '../../services/distanceService';
 import { uploadPropertyImage } from '../../services/storageService';
@@ -54,6 +59,30 @@ const DEFAULT_AMENITY_OPTIONS = [
   'Refrigerator',
   'Study Table & Chair',
   'Wardrobe / Almirah'
+];
+
+const COMMON_AMENITY_PRESETS = [
+  'High Speed WiFi',
+  'RO Drinking Water',
+  '24x7 Power Backup',
+  'Daily Cleaning',
+  'Attached Washroom',
+  'CCTV Security'
+];
+
+const SAMPLE_PROPERTY_PHOTOS = [
+  {
+    label: 'Modern PG Room',
+    url: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    label: 'Hostel Shared Room',
+    url: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    label: 'Study & Work Room',
+    url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80'
+  }
 ];
 
 const DEFAULT_RULE_PRESETS = [
@@ -137,6 +166,10 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
   const [uploadSlotErrors, setUploadSlotErrors] = useState<{ [slot: number]: string }>({});
   const [cameraModalSlot, setCameraModalSlot] = useState<number | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+  const [formNotice, setFormNotice] = useState<{ type: 'error' | 'info' | 'success'; message: string } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
   const fileInputRef0 = React.useRef<HTMLInputElement>(null);
   const fileInputRef1 = React.useRef<HTMLInputElement>(null);
   const fileInputRef2 = React.useRef<HTMLInputElement>(null);
@@ -210,6 +243,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   // Handle GPS location detection
   const handleDetectLocation = async () => {
     setIsCalculatingDistance(true);
+    setGpsStatus(null);
     try {
       const coords = await getLiveDeviceCoordinates();
       if (coords) {
@@ -223,9 +257,12 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         setBusStandDistanceKm(res.busStandDistanceKm);
         setPrimaryDistanceKm(res.primaryDistanceKm);
         setCommuteMinutes(res.commuteMinutes);
+        setGpsStatus('GPS coordinates detected successfully! Distances calibrated.');
       } else {
-        alert("Could not detect exact GPS coordinates. Using Pincode and Area estimates.");
+        setGpsStatus('Live GPS unavailable. Distances estimated from Area & PIN code.');
       }
+    } catch {
+      setGpsStatus('Location service blocked. Using default postal estimates.');
     } finally {
       setIsCalculatingDistance(false);
     }
@@ -245,6 +282,12 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           next[slotIndex] = res.publicUrl!;
           return next;
         });
+        setValidationErrors(prev => {
+          const next = { ...prev };
+          delete next.photos;
+          return next;
+        });
+        setFormNotice(null);
       } else {
         setUploadSlotErrors(prev => ({ ...prev, [slotIndex]: res.error || 'Failed to upload photo.' }));
       }
@@ -272,6 +315,31 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       const next = [...prev];
       next[slotIndex] = url;
       return next;
+    });
+    if (url.trim()) {
+      setValidationErrors(prev => {
+        const next = { ...prev };
+        delete next.photos;
+        return next;
+      });
+      setFormNotice(null);
+    }
+  };
+
+  const handleApplySamplePhoto = (url: string, slotIndex: number = 0) => {
+    setImages(prev => {
+      const next = [...prev];
+      next[slotIndex] = url;
+      return next;
+    });
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next.photos;
+      return next;
+    });
+    setFormNotice({
+      type: 'success',
+      message: 'Sample photo applied! You can replace it with your own photos anytime.'
     });
   };
 
@@ -305,22 +373,74 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     setCustomRule('');
   };
 
-  // Step Navigation
+  // Step Navigation with Inline Validation
+  const handleStepClick = (targetStep: 'basic' | 'pricing' | 'amenities' | 'media') => {
+    const order: Array<'basic' | 'pricing' | 'amenities' | 'media'> = ['basic', 'pricing', 'amenities', 'media'];
+    const currentIndex = order.indexOf(activeTab);
+    const targetIndex = order.indexOf(targetStep);
+
+    // Navigating backwards is always allowed
+    if (targetIndex <= currentIndex) {
+      setActiveTab(targetStep);
+      setFormNotice(null);
+      return;
+    }
+
+    // Jumping forward requires basic validation
+    if (!name.trim() || !address.trim()) {
+      setValidationErrors({
+        name: !name.trim() ? 'Property Name is required' : '',
+        address: !address.trim() ? 'Street Address is required' : ''
+      });
+      setFormNotice({
+        type: 'error',
+        message: 'Please fill in the required Property Name and Address before moving forward.'
+      });
+      setActiveTab('basic');
+      return;
+    }
+
+    setValidationErrors({});
+    setFormNotice(null);
+    setActiveTab(targetStep);
+  };
+
   const handleNextTab = () => {
+    setFormNotice(null);
     if (activeTab === 'basic') {
-      if (!name.trim() || !address.trim()) {
-        alert("Please enter Property Name and Address before proceeding.");
+      const errs: { [key: string]: string } = {};
+      if (!name.trim()) errs.name = 'Property Name is required';
+      if (!address.trim()) errs.address = 'Full Street Address is required';
+
+      if (Object.keys(errs).length > 0) {
+        setValidationErrors(errs);
+        setFormNotice({
+          type: 'error',
+          message: 'Please complete the required fields in Step 1 to proceed.'
+        });
         return;
       }
+      setValidationErrors({});
       setActiveTab('pricing');
     } else if (activeTab === 'pricing') {
+      if (!baseRent || baseRent <= 0) {
+        setValidationErrors({ baseRent: 'Please enter a valid monthly rent amount' });
+        setFormNotice({
+          type: 'error',
+          message: 'Monthly Base Rent must be greater than 0.'
+        });
+        return;
+      }
+      setValidationErrors({});
       setActiveTab('amenities');
     } else if (activeTab === 'amenities') {
+      setValidationErrors({});
       setActiveTab('media');
     }
   };
 
   const handlePrevTab = () => {
+    setFormNotice(null);
     if (activeTab === 'media') setActiveTab('amenities');
     else if (activeTab === 'amenities') setActiveTab('pricing');
     else if (activeTab === 'pricing') setActiveTab('basic');
@@ -349,16 +469,29 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       if (onRequireAuth) onRequireAuth();
       return;
     }
-    if (!name || !address) {
+
+    const errs: { [key: string]: string } = {};
+    if (!name.trim()) errs.name = 'Property Name is required';
+    if (!address.trim()) errs.address = 'Full Street Address is required';
+
+    if (Object.keys(errs).length > 0) {
       setActiveTab('basic');
-      alert("Please provide the Property Name and Address.");
+      setValidationErrors(errs);
+      setFormNotice({
+        type: 'error',
+        message: 'Please complete the required Property Name and Address.'
+      });
       return;
     }
 
     const validImages = images.filter(img => img && img.trim() !== '');
     if (validImages.length === 0) {
-      setActiveTab('basic');
-      alert("Please upload at least 1 photo of your property (minimum 1, maximum 3 required).");
+      // Stay on activeTab('media') without bouncing to basic
+      setValidationErrors({ photos: 'Please upload or select at least 1 cover photo for your property.' });
+      setFormNotice({
+        type: 'error',
+        message: 'At least 1 cover photo is required so students can view your listing.'
+      });
       return;
     }
 
@@ -448,7 +581,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
 
   // Reusable Multi-Photo Upload UI (1 to 3 slots)
   const slotLabels = [
-    { title: 'Cover / Main Photo *', desc: 'Main photo displayed in listings (Required)' },
+    { title: 'Cover / Main Photo *', desc: 'Main photo displayed to prospective students (Required)' },
     { title: 'Room / Interior Photo', desc: 'Bedroom, furniture, or study area (Optional)' },
     { title: 'Washroom / Common Area', desc: 'Washroom, mess, or premises (Optional)' }
   ];
@@ -460,7 +593,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
 
     return (
       <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
           <div>
             <div className="flex items-center gap-2">
               <label className="block font-bold text-slate-800 text-xs">
@@ -474,7 +607,33 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </div>
             {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
           </div>
+
+          {/* Quick Sample Photos Selector if no photos attached */}
+          {validCount === 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-500 font-medium">Quick sample:</span>
+              {SAMPLE_PROPERTY_PHOTOS.map((sample, idx) => (
+                <button
+                  key={sample.label}
+                  type="button"
+                  onClick={() => handleApplySamplePhoto(sample.url, 0)}
+                  className="px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold transition shadow-2xs cursor-pointer"
+                  title={`Use sample: ${sample.label}`}
+                >
+                  {sample.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Missing Photos Inline Error */}
+        {validationErrors.photos && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2 font-medium">
+            <AlertCircle size={15} className="shrink-0 text-rose-600" />
+            <span>{validationErrors.photos}</span>
+          </div>
+        )}
 
         {/* 3 Photo Slots Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -483,19 +642,45 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             const slotMeta = slotLabels[slotIdx];
             const isUploading = uploadingSlot === slotIdx;
             const slotError = uploadSlotErrors[slotIdx];
+            const isDragOver = dragOverSlot === slotIdx;
 
             return (
               <div 
                 key={slotIdx}
-                className="bg-white rounded-2xl border border-slate-200 p-2.5 flex flex-col justify-between shadow-xs min-h-[175px]"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverSlot(slotIdx);
+                }}
+                onDragLeave={() => setDragOverSlot(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverSlot(null);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleSlotFileUpload(file, slotIdx);
+                }}
+                className={`bg-white rounded-2xl border p-2.5 flex flex-col justify-between shadow-xs min-h-[185px] transition-all ${
+                  isDragOver
+                    ? 'border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-400'
+                    : slotIdx === 0 && !slotImg && validationErrors.photos
+                    ? 'border-rose-400 bg-rose-50/20'
+                    : 'border-slate-200'
+                }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-bold text-slate-800 truncate" title={slotMeta.title}>
                     {slotIdx + 1}. {slotMeta.title}
                   </span>
-                  {slotImg && (
+                  {slotImg ? (
                     <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md shrink-0">
                       ✓ Attached
+                    </span>
+                  ) : slotIdx === 0 ? (
+                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md shrink-0">
+                      Required
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400 font-medium">
+                      Optional
                     </span>
                   )}
                 </div>
@@ -544,7 +729,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     ) : (
                       <>
                         <p className="text-[10px] text-slate-400 mb-2 leading-tight">
-                          {slotMeta.desc}
+                          Drag & drop image here, or use options below
                         </p>
                         <div className="flex flex-col w-full gap-1.5">
                           <button
@@ -592,7 +777,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     placeholder="Or paste photo URL"
                     value={slotImg || ''}
                     onChange={e => handleSlotUrlChange(e.target.value, slotIdx)}
-                    className="w-full px-2 py-1 text-[10px] rounded-lg border border-slate-200"
+                    className="w-full px-2 py-1 text-[10px] rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -602,6 +787,13 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       </div>
     );
   };
+
+  const stepsList = [
+    { id: 'basic' as const, num: 1, label: '1. Basic Details', fullTitle: 'Step 1 of 4: Basic Details & Location' },
+    { id: 'pricing' as const, num: 2, label: '2. Pricing', fullTitle: 'Step 2 of 4: Pricing & Utilities' },
+    { id: 'amenities' as const, num: 3, label: '3. Amenities', fullTitle: 'Step 3 of 4: Amenities & House Rules' },
+    { id: 'media' as const, num: 4, label: '4. Photos & Rooms', fullTitle: 'Step 4 of 4: Photos, Rooms & Finish' }
+  ];
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -657,10 +849,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         <div className="pt-2.5 pb-1 shrink-0 border-b border-slate-100">
           <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1.5">
             <span className="text-slate-800">
-              {activeTab === 'basic' && 'Step 1 of 4: Basic Details & Location'}
-              {activeTab === 'pricing' && 'Step 2 of 4: Pricing & Utilities'}
-              {activeTab === 'amenities' && 'Step 3 of 4: Amenities & House Rules'}
-              {activeTab === 'media' && 'Step 4 of 4: Photos, Rooms & Finish'}
+              {stepsList.find(s => s.id === activeTab)?.fullTitle}
             </span>
             <span className="text-emerald-700 font-extrabold">
               {activeTab === 'basic' && '25%'}
@@ -682,89 +871,96 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             />
           </div>
 
-          {/* Tab Navigation buttons */}
+          {/* Interactive Stepper Navigation buttons */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setActiveTab('basic')}
-              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-                activeTab === 'basic'
-                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              1. Basic & Photo
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!name.trim() || !address.trim()) {
-                  alert("Please enter Property Name and Address first.");
-                  return;
-                }
-                setActiveTab('pricing');
-              }}
-              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-                activeTab === 'pricing'
-                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              2. Pricing
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!name.trim() || !address.trim()) {
-                  alert("Please enter Property Name and Address first.");
-                  return;
-                }
-                setActiveTab('amenities');
-              }}
-              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-                activeTab === 'amenities'
-                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              3. Amenities
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!name.trim() || !address.trim()) {
-                  alert("Please enter Property Name and Address first.");
-                  return;
-                }
-                setActiveTab('media');
-              }}
-              className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-                activeTab === 'media'
-                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              4. Photos & Rooms
-            </button>
+            {stepsList.map(step => {
+              const isCurrent = activeTab === step.id;
+              const isCompleted = 
+                step.id === 'basic' ? Boolean(name.trim() && address.trim()) :
+                step.id === 'pricing' ? Boolean(baseRent > 0) :
+                step.id === 'amenities' ? (selectedAmenities.length > 0) :
+                Boolean(images.filter(img => img && img.trim() !== '').length > 0);
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => handleStepClick(step.id)}
+                  className={`px-3 py-1.5 rounded-xl transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    isCurrent
+                      ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                      : isCompleted
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 font-semibold'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{step.label}</span>
+                  {isCompleted && !isCurrent && (
+                    <CheckCircle2 size={12} className="text-emerald-700 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Form Container */}
         <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex-1 overflow-y-auto pt-3.5 pb-2 text-xs space-y-4">
           
+          {/* Global Inline Notice Banner */}
+          {formNotice && (
+            <div className={`p-3 rounded-2xl text-xs flex items-center justify-between border transition-all ${
+              formNotice.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : formNotice.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                {formNotice.type === 'error' ? (
+                  <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                ) : (
+                  <Info size={15} className="shrink-0 text-emerald-600" />
+                )}
+                <span className="font-semibold">{formNotice.message}</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setFormNotice(null)} 
+                className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          
           {/* TAB 1: BASIC & LOCATION */}
           {activeTab === 'basic' && (
             <div className="space-y-3.5">
               <div>
-                <label className="block font-bold text-slate-800 mb-1">Property Name *</label>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Property Name <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Balaji Student Residency"
                   value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+                  onChange={e => {
+                    setName(e.target.value);
+                    if (validationErrors.name) setValidationErrors(prev => ({ ...prev, name: '' }));
+                  }}
+                  className={`w-full px-3 py-2 text-sm rounded-xl border transition ${
+                    validationErrors.name
+                      ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                      : 'border-slate-300 focus:ring-2 focus:ring-emerald-500'
+                  }`}
                   required
                 />
+                {validationErrors.name && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                    <AlertCircle size={11} /> {validationErrors.name}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -825,15 +1021,29 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-800 mb-1">Full Street Address *</label>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Full Street Address <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. House No. 24, Near Kali Mandir, Station Road"
                   value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300"
+                  onChange={e => {
+                    setAddress(e.target.value);
+                    if (validationErrors.address) setValidationErrors(prev => ({ ...prev, address: '' }));
+                  }}
+                  className={`w-full px-3 py-2 text-sm rounded-xl border transition ${
+                    validationErrors.address
+                      ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                      : 'border-slate-300 focus:ring-2 focus:ring-emerald-500'
+                  }`}
                   required
                 />
+                {validationErrors.address && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                    <AlertCircle size={11} /> {validationErrors.address}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -858,12 +1068,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     type="button"
                     onClick={handleDetectLocation}
                     disabled={isCalculatingDistance}
-                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-100/60 px-2.5 py-1 rounded-lg transition"
+                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-100/60 px-2.5 py-1 rounded-lg transition cursor-pointer"
                   >
                     <MapPin size={12} />
                     <span>{isCalculatingDistance ? 'Detecting...' : 'Detect GPS Coords'}</span>
                   </button>
                 </div>
+
+                {gpsStatus && (
+                  <div className="text-[11px] text-emerald-800 bg-emerald-50/90 border border-emerald-200 rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                    <span>{gpsStatus}</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
@@ -928,12 +1145,6 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-
-              {/* Photo Upload (Available in Step 1 & Step 4) */}
-              {renderPhotoUploadSection(
-                'Property Cover Photo (Supabase Storage)',
-                'Upload directly from your device camera/gallery or paste an image link'
-              )}
             </div>
           )}
 
@@ -1087,6 +1298,20 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* Estimated Total Monthly Cost to Tenant Banner */}
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">Estimated Total Monthly Cost to Tenant</span>
+                  <p className="text-[10px] text-slate-500">Rent + Maintenance + Wi-Fi {foodAvailable ? '+ Food / Mess' : ''}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-base font-extrabold text-emerald-800">
+                    ₹{(Number(baseRent || 0) + Number(maintenance || 0) + Number(wifiCost || 0) + (foodAvailable ? Number(foodCost || 0) : 0)).toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[10px] text-slate-500 block font-medium">/ month</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1094,9 +1319,28 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           {activeTab === 'amenities' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-bold text-slate-800 mb-1.5">
-                  Property Amenities ({selectedAmenities.length} selected)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-slate-800">
+                    Property Amenities ({selectedAmenities.length} selected)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAmenities(COMMON_AMENITY_PRESETS)}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                    >
+                      Select Common
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAmenities([])}
+                      className="text-[10px] font-medium text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {DEFAULT_AMENITY_OPTIONS.map(a => {
                     const isSelected = selectedAmenities.includes(a);
@@ -1253,6 +1497,44 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   </p>
                 </div>
               )}
+
+              {/* Pre-Publish Listing Summary Preview Card */}
+              <div className="p-3.5 bg-slate-900 text-white rounded-2xl space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-[10px] font-extrabold uppercase tracking-wider">
+                      {type}
+                    </span>
+                    <h4 className="font-bold text-xs sm:text-sm text-white truncate max-w-[200px] sm:max-w-[320px]">
+                      {name || 'Untitled Property'}
+                    </h4>
+                  </div>
+                  <span className="text-xs font-extrabold text-emerald-400">
+                    ₹{Number(baseRent || 0).toLocaleString('en-IN')}/mo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Location</span>
+                    <span className="font-semibold text-white truncate block">{area}, {city}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Deposit</span>
+                    <span className="font-semibold text-white">₹{Number(deposit || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Inventory</span>
+                    <span className="font-semibold text-white">{isEditMode ? 'Existing Rooms' : `${initialRooms} Rooms (${initialRoomType})`}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Photos</span>
+                    <span className={`font-semibold ${images.filter(img => img && img.trim() !== '').length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {images.filter(img => img && img.trim() !== '').length} of 3 Attached {images.filter(img => img && img.trim() !== '').length > 0 ? '✓' : '(Min 1)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
               {/* Moderation / Active Status Toggle */}
               <div className="p-3.5 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl flex items-center justify-between">
