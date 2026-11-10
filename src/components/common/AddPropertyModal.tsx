@@ -34,8 +34,8 @@ import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface AddPropertyModalProps {
   onClose: () => void;
-  onAddProperty: (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => void;
-  onUpdateProperty?: (updated: Property) => void;
+  onAddProperty: (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => void | Promise<void>;
+  onUpdateProperty?: (updated: Property) => void | Promise<void>;
   initialProperty?: Property | null;
   isAuthenticated: boolean;
   currentUserId: string;
@@ -170,6 +170,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [formNotice, setFormNotice] = useState<{ type: 'error' | 'info' | 'success'; message: string } | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<'saving' | 'success' | null>(null);
   const fileInputRef0 = React.useRef<HTMLInputElement>(null);
   const fileInputRef1 = React.useRef<HTMLInputElement>(null);
   const fileInputRef2 = React.useRef<HTMLInputElement>(null);
@@ -456,7 +458,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   };
 
   // Form Submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Guard: Never submit prematurely before the final step
@@ -498,85 +500,100 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     const primaryImage = validImages[0];
     const finalImagesList = validImages.slice(0, 3);
 
-    if (isEditMode && initialProperty && onUpdateProperty) {
-      onUpdateProperty({
-        ...initialProperty,
-        name,
-        type,
-        address,
-        area,
-        city,
-        landmark: landmark || initialProperty.landmark,
-        pincode,
-        latitude,
-        longitude,
-        distanceKm: primaryDistanceKm,
-        commuteMinutes,
-        stationDistanceKm,
-        busStandDistanceKm,
-        baseRent: Number(baseRent),
-        deposit: Number(deposit),
-        brokerage: Number(brokerage),
-        electricityType,
-        electricityRate: Number(electricityRate),
-        wifiCost: Number(wifiCost),
-        maintenance: Number(maintenance),
-        foodAvailable,
-        foodIncluded,
-        foodCost: foodAvailable ? Number(foodCost) : 0,
-        rules,
-        amenities: selectedAmenities,
-        image: primaryImage,
-        images: finalImagesList,
-        description: description || initialProperty.description,
-        isActive,
-        verificationStatus
+    setIsSubmitting(true);
+    setSubmitPhase('saving');
+
+    try {
+      if (isEditMode && initialProperty && onUpdateProperty) {
+        await Promise.resolve(onUpdateProperty({
+          ...initialProperty,
+          name,
+          type,
+          address,
+          area,
+          city,
+          landmark: landmark || initialProperty.landmark,
+          pincode,
+          latitude,
+          longitude,
+          distanceKm: primaryDistanceKm,
+          commuteMinutes,
+          stationDistanceKm,
+          busStandDistanceKm,
+          baseRent: Number(baseRent),
+          deposit: Number(deposit),
+          brokerage: Number(brokerage),
+          electricityType,
+          electricityRate: Number(electricityRate),
+          wifiCost: Number(wifiCost),
+          maintenance: Number(maintenance),
+          foodAvailable,
+          foodIncluded,
+          foodCost: foodAvailable ? Number(foodCost) : 0,
+          rules,
+          amenities: selectedAmenities,
+          image: primaryImage,
+          images: finalImagesList,
+          description: description || initialProperty.description,
+          isActive,
+          verificationStatus
+        }));
+      } else {
+        const bedsPerRoom = initialRoomType === 'Single' ? 1 : initialRoomType === '2 Sharing' ? 2 : 3;
+        const totalBeds = initialRooms * bedsPerRoom;
+
+        await Promise.resolve(onAddProperty({
+          ownerId: currentUserId,
+          name,
+          type,
+          address,
+          area,
+          city,
+          landmark: landmark || 'Near College Road',
+          pincode,
+          latitude,
+          longitude,
+          distanceKm: primaryDistanceKm,
+          commuteMinutes,
+          stationDistanceKm,
+          busStandDistanceKm,
+          totalBeds,
+          availableBeds: totalBeds,
+          baseRent: Number(baseRent),
+          deposit: Number(deposit),
+          brokerage: Number(brokerage),
+          electricityType,
+          electricityRate: Number(electricityRate),
+          wifiCost: Number(wifiCost),
+          maintenance: Number(maintenance),
+          foodAvailable,
+          foodIncluded,
+          foodCost: foodAvailable ? Number(foodCost) : 0,
+          rules,
+          amenities: selectedAmenities,
+          image: primaryImage,
+          images: finalImagesList,
+          description: description || `${name} located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} High speed WiFi, security, and comfortable student accommodation.`,
+          ownerName: ownerName || 'RoomSaathi Landlord',
+          isActive,
+          verificationStatus
+        }, Number(initialRooms)));
+      }
+
+      setSubmitPhase('success');
+      setTimeout(() => {
+        setIsSubmitting(false);
+        setSubmitPhase(null);
+        onClose();
+      }, 900);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitPhase(null);
+      setFormNotice({
+        type: 'error',
+        message: err?.message || 'Failed to save property. Please try again.'
       });
-      onClose();
-      return;
     }
-
-    const bedsPerRoom = initialRoomType === 'Single' ? 1 : initialRoomType === '2 Sharing' ? 2 : 3;
-    const totalBeds = initialRooms * bedsPerRoom;
-
-    onAddProperty({
-      ownerId: currentUserId,
-      name,
-      type,
-      address,
-      area,
-      city,
-      landmark: landmark || 'Near College Road',
-      pincode,
-      latitude,
-      longitude,
-      distanceKm: primaryDistanceKm,
-      commuteMinutes,
-      stationDistanceKm,
-      busStandDistanceKm,
-      totalBeds,
-      availableBeds: totalBeds,
-      baseRent: Number(baseRent),
-      deposit: Number(deposit),
-      brokerage: Number(brokerage),
-      electricityType,
-      electricityRate: Number(electricityRate),
-      wifiCost: Number(wifiCost),
-      maintenance: Number(maintenance),
-      foodAvailable,
-      foodIncluded,
-      foodCost: foodAvailable ? Number(foodCost) : 0,
-      rules,
-      amenities: selectedAmenities,
-      image: primaryImage,
-      images: finalImagesList,
-      description: description || `${name} located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} High speed WiFi, security, and comfortable student accommodation.`,
-      ownerName: ownerName || 'RoomSaathi Landlord',
-      isActive,
-      verificationStatus
-    }, Number(initialRooms));
-
-    onClose();
   };
 
   // Reusable Multi-Photo Upload UI (1 to 3 slots)
@@ -797,8 +814,50 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-6 max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-6 max-h-[92vh] flex flex-col relative overflow-hidden">
         
+        {/* Full Modal Submission Loader Overlay */}
+        {isSubmitting && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+            {submitPhase === 'saving' ? (
+              <div className="space-y-4 max-w-xs flex flex-col items-center">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner">
+                    <Building2 size={32} className="animate-pulse" />
+                  </div>
+                  <div className="absolute -inset-2 border-3 border-emerald-600 border-t-transparent rounded-3xl animate-spin" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-base text-slate-900">
+                    {isEditMode ? 'Updating Property...' : 'Publishing Property...'}
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Setting up rooms, bed allocations, and calibrating transit distances...
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full shadow-2xs">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Syncing with RoomSaathi</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-xs flex flex-col items-center">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-600/30">
+                  <CheckCircle2 size={34} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-base text-slate-900">
+                    {isEditMode ? 'Changes Saved!' : 'Property Published!'}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Your listing is live. Redirecting to your dashboard...
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -819,7 +878,10 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           <button 
             type="button" 
             onClick={onClose} 
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+            disabled={isSubmitting}
+            className={`text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer ${
+              isSubmitting ? 'opacity-30 cursor-not-allowed' : ''
+            }`}
           >
             <X size={18} />
           </button>
@@ -1566,7 +1628,10 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer"
+              disabled={isSubmitting}
+              className={`px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer ${
+                isSubmitting ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
+              }`}
             >
               Cancel
             </button>
@@ -1576,7 +1641,10 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePrevTab}
-                  className="px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer"
+                  disabled={isSubmitting}
+                  className={`px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer ${
+                    isSubmitting ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
+                  }`}
                 >
                   ← Back
                 </button>
@@ -1586,6 +1654,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 <button
                   type="button"
                   onClick={handleNextTab}
+                  disabled={isSubmitting}
                   className="px-4 py-2 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs text-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>
@@ -1597,23 +1666,32 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
               ) : (
                 <button
                   type="submit"
-                  disabled={!isAuthenticated || uploadingSlot !== null}
+                  disabled={!isAuthenticated || uploadingSlot !== null || isSubmitting}
                   className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer ${
-                    !isAuthenticated || uploadingSlot !== null
-                      ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                    !isAuthenticated || uploadingSlot !== null || isSubmitting
+                      ? 'bg-emerald-800/80 cursor-not-allowed opacity-80'
                       : 'bg-emerald-700 hover:bg-emerald-800'
                   }`}
                 >
-                  {isEditMode ? <Check size={15} /> : <Plus size={15} />}
-                  <span>
-                    {!isAuthenticated
-                      ? 'Sign In Required'
-                      : uploadingSlot !== null
-                      ? 'Uploading Photo...'
-                      : isEditMode
-                      ? 'Save Changes'
-                      : 'Publish Property'}
-                  </span>
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{isEditMode ? 'Saving Changes...' : 'Publishing Property...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      {isEditMode ? <Check size={15} /> : <Plus size={15} />}
+                      <span>
+                        {!isAuthenticated
+                          ? 'Sign In Required'
+                          : uploadingSlot !== null
+                          ? 'Uploading Photo...'
+                          : isEditMode
+                          ? 'Save Changes'
+                          : 'Publish Property'}
+                      </span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
