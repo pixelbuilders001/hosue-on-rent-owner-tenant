@@ -27,11 +27,33 @@ export interface TenantProfile {
   activeBedLabel?: string;
 }
 
+export type PropertyCategory = 'entire_house' | 'private_room' | 'shared_pg';
+export type BhkType = '1 RK' | '1 BHK' | '2 BHK' | '3 BHK' | '4+ BHK' | 'Independent House';
+export type FurnishingStatus = 'unfurnished' | 'semi_furnished' | 'fully_furnished' | 'Unfurnished' | 'Semi-Furnished' | 'Fully Furnished';
+export type PreferredTenant = 'family_only' | 'bachelors_allowed' | 'any' | 'girls_only' | 'boys_only' | 'Family' | 'Bachelors' | 'Family or Bachelors' | 'Female Only' | 'Any';
+export type ParkingType = 'none' | 'bike_only' | 'car_only' | 'car_and_bike' | 'None' | 'Bike Only' | 'Car Only' | 'Bike & Car';
+export type KitchenType = 'private_modular' | 'shared_with_owner' | 'no_cooking' | 'private_kitchenette' | 'none';
+export type FoodPreference = 'veg_only' | 'no_restriction' | 'Vegetarian Only' | 'No Preference' | 'Veg Only' | 'Non-Veg Allowed';
+
 export interface Property {
   id: string;
   ownerId: string;
   name: string;
   type: 'PG' | 'Hostel' | 'Room' | 'Flat';
+  category?: PropertyCategory;
+  bhkType?: BhkType;
+  furnishingStatus?: FurnishingStatus;
+  preferredTenant?: PreferredTenant;
+  builtupSqft?: number;
+  bathroomsCount?: number;
+  balconiesCount?: number;
+  floorNumber?: number;
+  totalFloors?: number;
+  parkingType?: ParkingType;
+  ownerResidesHere?: boolean;
+  kitchenType?: KitchenType;
+  privateEntrance?: boolean;
+  foodPreference?: FoodPreference;
   address: string;
   area: string;
   city: string;
@@ -74,6 +96,9 @@ export interface Room {
   roomType: 'Single' | '2 Sharing' | '3 Sharing' | '4 Sharing';
   totalBeds: number;
   baseRent: number;
+  attachedWashroom?: boolean;
+  hasBalcony?: boolean;
+  isPrivateRoom?: boolean;
   isActive?: boolean;
 }
 
@@ -90,9 +115,9 @@ export interface Bed {
 export interface Tenant {
   id: string;
   propertyId: string;
-  roomId: string;
+  roomId?: string;
   bedId?: string;
-  roomNumber: string;
+  roomNumber?: string;
   bedLabel?: string;
   fullName: string;
   phone: string;
@@ -106,6 +131,8 @@ export interface Tenant {
   depositPaid: number;
   status: 'active' | 'notice' | 'vacated';
   policeVerificationStatus: 'pending' | 'submitted' | 'verified';
+  tenantCategory?: 'family' | 'bachelor_individual' | 'student';
+  familyMembersCount?: number;
 }
 
 export interface Lead {

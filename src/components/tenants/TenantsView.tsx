@@ -57,7 +57,7 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
 
   const filteredTenants = propTenants.filter(t => 
     t.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.roomNumber && t.roomNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
     t.phone.includes(searchQuery)
   );
 

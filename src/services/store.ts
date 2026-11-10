@@ -122,6 +122,20 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         ownerId: p.owner_id || 'owner-default',
         name: p.name,
         type: p.type,
+        category: p.category || (p.type === 'Flat' ? 'entire_house' : p.type === 'Room' ? 'private_room' : 'shared_pg'),
+        bhkType: p.bhk_type || undefined,
+        furnishingStatus: p.furnishing_status || undefined,
+        preferredTenant: p.preferred_tenant || 'any',
+        builtupSqft: p.builtup_sqft ? Number(p.builtup_sqft) : undefined,
+        bathroomsCount: p.bathrooms_count ? Number(p.bathrooms_count) : undefined,
+        balconiesCount: p.balconies_count ? Number(p.balconies_count) : undefined,
+        floorNumber: p.floor_number ? Number(p.floor_number) : undefined,
+        totalFloors: p.total_floors ? Number(p.total_floors) : undefined,
+        parkingType: p.parking_type || undefined,
+        ownerResidesHere: p.owner_resides_here ?? false,
+        kitchenType: p.kitchen_type || undefined,
+        privateEntrance: p.private_entrance ?? false,
+        foodPreference: p.food_preference || 'no_restriction',
         address: p.address || p.area,
         area: p.area,
         city: p.city,
@@ -163,6 +177,9 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         roomType: r.accommodation,
         totalBeds: r.total_beds || 2,
         baseRent: r.rent,
+        attachedWashroom: r.attached_washroom ?? false,
+        hasBalcony: r.has_balcony ?? false,
+        isPrivateRoom: r.is_private_room ?? false,
         isActive: r.is_active ?? true
       })),
       beds: (bedsRes.data || []).map((b: any) => ({
@@ -206,7 +223,9 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         monthlyRent: t.monthly_rent,
         depositPaid: t.deposit_paid,
         status: t.status,
-        policeVerificationStatus: t.police_verification_status
+        policeVerificationStatus: t.police_verification_status,
+        tenantCategory: t.tenant_category || 'student',
+        familyMembersCount: t.family_members_count ? Number(t.family_members_count) : 1
       })),
       rentRecords: (rentsRes.data || []).map((r: any) => ({
         id: r.id,
@@ -316,6 +335,20 @@ export async function syncPropertyToSupabase(
       color: '#176b58',
       description: prop.description || `${prop.name} located in ${prop.area}, ${prop.city}. ${prop.landmark || ''}`,
       owner_name: prop.ownerName || prop.name || 'RoomSaathi Landlord',
+      category: prop.category || 'shared_pg',
+      bhk_type: prop.bhkType || null,
+      furnishing_status: prop.furnishingStatus || null,
+      preferred_tenant: prop.preferredTenant || null,
+      builtup_sqft: prop.builtupSqft ? Number(prop.builtupSqft) : null,
+      bathrooms_count: prop.bathroomsCount ? Number(prop.bathroomsCount) : null,
+      balconies_count: prop.balconiesCount ? Number(prop.balconiesCount) : null,
+      floor_number: prop.floorNumber ? Number(prop.floorNumber) : null,
+      total_floors: prop.totalFloors ? Number(prop.totalFloors) : null,
+      parking_type: prop.parkingType || null,
+      owner_resides_here: prop.ownerResidesHere ?? false,
+      kitchen_type: prop.kitchenType || null,
+      private_entrance: prop.privateEntrance ?? false,
+      food_preference: prop.foodPreference || null,
       rules: prop.rules || [],
       updated_label: 'Just now',
       is_active: prop.isActive ?? true
@@ -335,6 +368,9 @@ export async function syncPropertyToSupabase(
         rent: Number(r.baseRent) || 0,
         floor: Number(r.floor) || 1,
         total_beds: Number(r.totalBeds) || 2,
+        attached_washroom: r.attachedWashroom ?? false,
+        has_balcony: r.hasBalcony ?? false,
+        is_private_room: r.isPrivateRoom ?? false,
         is_active: r.isActive ?? true
       })));
       if (roomsErr) console.error('Error inserting rooms:', roomsErr);
@@ -366,6 +402,20 @@ export async function syncUpdatePropertyToSupabase(prop: Property): Promise<bool
     const { error: propErr } = await supabase.from('properties').update({
       name: prop.name,
       type: prop.type,
+      category: prop.category || 'shared_pg',
+      bhk_type: prop.bhkType || null,
+      furnishing_status: prop.furnishingStatus || null,
+      preferred_tenant: prop.preferredTenant || null,
+      builtup_sqft: prop.builtupSqft ? Number(prop.builtupSqft) : null,
+      bathrooms_count: prop.bathroomsCount ? Number(prop.bathroomsCount) : null,
+      balconies_count: prop.balconiesCount ? Number(prop.balconiesCount) : null,
+      floor_number: prop.floorNumber ? Number(prop.floorNumber) : null,
+      total_floors: prop.totalFloors ? Number(prop.totalFloors) : null,
+      parking_type: prop.parkingType || null,
+      owner_resides_here: prop.ownerResidesHere ?? false,
+      kitchen_type: prop.kitchenType || null,
+      private_entrance: prop.privateEntrance ?? false,
+      food_preference: prop.foodPreference || null,
       city: prop.city,
       area: prop.area,
       address: prop.address || prop.area,
@@ -441,6 +491,9 @@ export async function syncRoomToSupabase(room: Room, beds: Bed[]) {
       rent: Number(room.baseRent) || 0,
       floor: Number(room.floor) || 1,
       total_beds: Number(room.totalBeds) || 2,
+      attached_washroom: room.attachedWashroom ?? false,
+      has_balcony: room.hasBalcony ?? false,
+      is_private_room: room.isPrivateRoom ?? false,
       is_active: room.isActive ?? true
     });
 
@@ -482,7 +535,9 @@ export async function syncTenantToSupabase(tenant: Tenant, rentRecord?: RentReco
       monthly_rent: Number(tenant.monthlyRent) || 0,
       deposit_paid: Number(tenant.depositPaid) || 0,
       status: tenant.status || 'active',
-      police_verification_status: tenant.policeVerificationStatus || 'pending'
+      police_verification_status: tenant.policeVerificationStatus || 'pending',
+      tenant_category: tenant.tenantCategory || null,
+      family_members_count: tenant.familyMembersCount ? Number(tenant.familyMembersCount) : null
     });
 
     if (tenant.bedId) {

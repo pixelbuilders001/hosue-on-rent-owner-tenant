@@ -458,7 +458,7 @@ export function App() {
       tenantName: newTenant.fullName,
       propertyId: newTenant.propertyId,
       propertyName: state.properties.find(p => p.id === newTenant.propertyId)?.name || activeProperty?.name || 'Property',
-      roomNumber: newTenant.roomNumber,
+      roomNumber: newTenant.roomNumber || 'Unit',
       month: 'October 2026',
       baseRent: newTenant.monthlyRent,
       wifiAmount: 150,
@@ -622,20 +622,68 @@ export function App() {
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    const newRooms: Room[] = Array.from({ length: initialRooms }, (_, i) => ({
-      id: `room-${propId}-${i + 1}`,
-      propertyId: propId,
-      roomNumber: `${101 + i}`,
-      floor: 1,
-      roomType: '2 Sharing',
-      totalBeds: 2,
-      baseRent: prop.baseRent
-    }));
+    let newRooms: Room[] = [];
+    let newBeds: Bed[] = [];
 
-    const newBeds: Bed[] = newRooms.flatMap(r => [
-      { id: `bed-${r.id}-a`, roomId: r.id, propertyId: propId, bedLabel: 'Bed A', status: 'available' as Bed['status'] },
-      { id: `bed-${r.id}-b`, roomId: r.id, propertyId: propId, bedLabel: 'Bed B', status: 'available' as Bed['status'] }
-    ]);
+    if (prop.category === 'entire_house') {
+      const bhkLabel = prop.bhkType ? `${prop.bhkType}` : 'Entire House';
+      const singleRoom: Room = {
+        id: `room-${propId}-unit`,
+        propertyId: propId,
+        roomNumber: bhkLabel,
+        floor: prop.floorNumber || 1,
+        roomType: 'Single',
+        totalBeds: 1,
+        baseRent: prop.baseRent,
+        attachedWashroom: (prop.bathroomsCount || 0) > 0,
+        hasBalcony: (prop.balconiesCount || 0) > 0,
+        isPrivateRoom: true
+      };
+      newRooms = [singleRoom];
+      newBeds = [{
+        id: `bed-${singleRoom.id}-1`,
+        roomId: singleRoom.id,
+        propertyId: propId,
+        bedLabel: 'Entire Unit Lease',
+        status: 'available'
+      }];
+    } else if (prop.category === 'private_room') {
+      const roomsCount = Math.max(1, initialRooms);
+      newRooms = Array.from({ length: roomsCount }, (_, i) => ({
+        id: `room-${propId}-${i + 1}`,
+        propertyId: propId,
+        roomNumber: `Room ${i + 1}`,
+        floor: prop.floorNumber || 1,
+        roomType: 'Single',
+        totalBeds: 1,
+        baseRent: prop.baseRent,
+        attachedWashroom: true,
+        hasBalcony: false,
+        isPrivateRoom: true
+      }));
+      newBeds = newRooms.map(r => ({
+        id: `bed-${r.id}-1`,
+        roomId: r.id,
+        propertyId: propId,
+        bedLabel: 'Private Bed',
+        status: 'available'
+      }));
+    } else {
+      newRooms = Array.from({ length: initialRooms }, (_, i) => ({
+        id: `room-${propId}-${i + 1}`,
+        propertyId: propId,
+        roomNumber: `${101 + i}`,
+        floor: 1,
+        roomType: '2 Sharing',
+        totalBeds: 2,
+        baseRent: prop.baseRent
+      }));
+
+      newBeds = newRooms.flatMap(r => [
+        { id: `bed-${r.id}-a`, roomId: r.id, propertyId: propId, bedLabel: 'Bed A', status: 'available' as Bed['status'] },
+        { id: `bed-${r.id}-b`, roomId: r.id, propertyId: propId, bedLabel: 'Bed B', status: 'available' as Bed['status'] }
+      ]);
+    }
 
     await syncPropertyToSupabase(newProperty, newRooms, newBeds);
 

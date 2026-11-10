@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Property } from '../../types';
+import { 
+  Property, 
+  PropertyCategory, 
+  BhkType, 
+  FurnishingStatus, 
+  PreferredTenant, 
+  ParkingType, 
+  KitchenType, 
+  FoodPreference 
+} from '../../types';
 import { 
   X, 
   Building2, 
@@ -26,7 +35,13 @@ import {
   Info,
   ChevronRight,
   ArrowRight,
-  BedDouble
+  BedDouble,
+  Home,
+  DoorOpen,
+  Car,
+  Layers,
+  Bath,
+  CheckSquare
 } from 'lucide-react';
 import { calculateTransitDistances, getLiveDeviceCoordinates } from '../../services/distanceService';
 import { uploadPropertyImage } from '../../services/storageService';
@@ -54,14 +69,37 @@ const DEFAULT_AMENITY_OPTIONS = [
   'AC',
   'CCTV Security',
   'Bike Parking',
+  'Covered Car Parking',
   'Food / Mess Facility',
   'Washing Machine',
   'Refrigerator',
   'Study Table & Chair',
-  'Wardrobe / Almirah'
+  'Wardrobe / Almirah',
+  'Modular Kitchen',
+  'Balcony / Terrace',
+  'Lift Access',
+  'Gated Society Security'
 ];
 
-const COMMON_AMENITY_PRESETS = [
+const ENTIRE_HOUSE_AMENITY_PRESETS = [
+  'Covered Car Parking',
+  '24x7 Power Backup',
+  '24x7 Water Supply',
+  'Geyser (Hot Water)',
+  'Balcony / Terrace',
+  'Gated Society Security'
+];
+
+const PRIVATE_ROOM_AMENITY_PRESETS = [
+  'Attached Washroom',
+  'High Speed WiFi',
+  'RO Drinking Water',
+  'Geyser (Hot Water)',
+  'Wardrobe / Almirah',
+  'Study Table & Chair'
+];
+
+const SHARED_PG_AMENITY_PRESETS = [
   'High Speed WiFi',
   'RO Drinking Water',
   '24x7 Power Backup',
@@ -70,28 +108,47 @@ const COMMON_AMENITY_PRESETS = [
   'CCTV Security'
 ];
 
-const SAMPLE_PROPERTY_PHOTOS = [
-  {
-    label: 'Modern PG Room',
-    url: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    label: 'Hostel Shared Room',
-    url: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    label: 'Study & Work Room',
-    url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80'
-  }
+const ENTIRE_HOUSE_RULE_PRESETS = [
+  'Family or working professionals preferred',
+  'Maintain society hygiene & tranquility',
+  'No loud music or parties after 10:30 PM',
+  '30 days advance notice before vacating',
+  'Pet policy subject to society guidelines'
 ];
 
-const DEFAULT_RULE_PRESETS = [
+const PRIVATE_ROOM_RULE_PRESETS = [
+  'Gate closes at 10:30 PM',
+  'Strictly no smoking or alcohol on premises',
+  'Visitors allowed in common living room only',
+  'Quiet hours between 11:00 PM and 6:00 AM',
+  'Prior intimation for overnight guests'
+];
+
+const SHARED_PG_RULE_PRESETS = [
   'Gate closes at 10:30 PM',
   'Strictly no smoking or alcohol on premises',
   'Visitors allowed in common reception only',
   'Quiet hours between 11:00 PM and 6:00 AM',
   '30 days advance notice before vacating'
 ];
+
+const SAMPLE_PROPERTY_PHOTOS_BY_CAT: Record<PropertyCategory, Array<{ label: string; url: string }>> = {
+  entire_house: [
+    { label: 'Living Room', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Master Bedroom', url: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Modular Kitchen', url: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80' }
+  ],
+  private_room: [
+    { label: 'Private Bedroom', url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Attached Washroom', url: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Study & Work Desk', url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80' }
+  ],
+  shared_pg: [
+    { label: 'Modern PG Room', url: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Hostel Shared Room', url: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Common Study Area', url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80' }
+  ]
+};
 
 export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   onClose,
@@ -187,11 +244,73 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   const [isActive, setIsActive] = useState(initialProperty ? (initialProperty.isActive ?? true) : true);
   const [verificationStatus, setVerificationStatus] = useState<Property['verificationStatus']>(initialProperty?.verificationStatus || 'pending');
 
+  // Category & Model Configuration
+  const [category, setCategory] = useState<PropertyCategory>(initialProperty?.category || 'entire_house');
+  const [bhkType, setBhkType] = useState<BhkType>(initialProperty?.bhkType || '2 BHK');
+  const [furnishingStatus, setFurnishingStatus] = useState<FurnishingStatus>(initialProperty?.furnishingStatus || 'Semi-Furnished');
+  const [preferredTenant, setPreferredTenant] = useState<PreferredTenant>(initialProperty?.preferredTenant || 'Family or Bachelors');
+  const [builtupSqft, setBuiltupSqft] = useState<number | undefined>(initialProperty?.builtupSqft || 900);
+  const [bathroomsCount, setBathroomsCount] = useState<number>(initialProperty?.bathroomsCount || 2);
+  const [balconiesCount, setBalconiesCount] = useState<number>(initialProperty?.balconiesCount || 1);
+  const [floorNumber, setFloorNumber] = useState<number>(initialProperty?.floorNumber || 1);
+  const [totalFloors, setTotalFloors] = useState<number>(initialProperty?.totalFloors || 3);
+  const [parkingType, setParkingType] = useState<ParkingType>(initialProperty?.parkingType || 'Bike & Car');
+  const [ownerResidesHere, setOwnerResidesHere] = useState<boolean>(initialProperty?.ownerResidesHere ?? true);
+  const [kitchenType, setKitchenType] = useState<KitchenType>(initialProperty?.kitchenType || 'shared_with_owner');
+  const [privateEntrance, setPrivateEntrance] = useState<boolean>(initialProperty?.privateEntrance ?? false);
+  const [foodPreference, setFoodPreference] = useState<FoodPreference>(initialProperty?.foodPreference || 'No Preference');
+
+  // Select category and calibrate defaults dynamically
+  const handleSelectCategory = (newCat: PropertyCategory) => {
+    setCategory(newCat);
+    if (!isEditMode) {
+      if (newCat === 'entire_house') {
+        setType('Flat');
+        setBaseRent(12000);
+        setDeposit(24000);
+        setMaintenance(500);
+        setSelectedAmenities(ENTIRE_HOUSE_AMENITY_PRESETS);
+        setRules(ENTIRE_HOUSE_RULE_PRESETS);
+        setInitialRooms(1);
+      } else if (newCat === 'private_room') {
+        setType('Room');
+        setBaseRent(4500);
+        setDeposit(4500);
+        setMaintenance(100);
+        setSelectedAmenities(PRIVATE_ROOM_AMENITY_PRESETS);
+        setRules(PRIVATE_ROOM_RULE_PRESETS);
+        setInitialRooms(1);
+      } else {
+        setType('PG');
+        setBaseRent(3500);
+        setDeposit(3500);
+        setMaintenance(100);
+        setSelectedAmenities(SHARED_PG_AMENITY_PRESETS);
+        setRules(SHARED_PG_RULE_PRESETS);
+        setInitialRooms(4);
+      }
+    }
+  };
+
   // Populate on initialProperty change
   useEffect(() => {
     if (initialProperty) {
       setName(initialProperty.name || '');
       setType(initialProperty.type || 'PG');
+      setCategory(initialProperty.category || 'entire_house');
+      setBhkType(initialProperty.bhkType || '2 BHK');
+      setFurnishingStatus(initialProperty.furnishingStatus || 'Semi-Furnished');
+      setPreferredTenant(initialProperty.preferredTenant || 'Family or Bachelors');
+      setBuiltupSqft(initialProperty.builtupSqft || 900);
+      setBathroomsCount(initialProperty.bathroomsCount || 2);
+      setBalconiesCount(initialProperty.balconiesCount || 1);
+      setFloorNumber(initialProperty.floorNumber || 1);
+      setTotalFloors(initialProperty.totalFloors || 3);
+      setParkingType(initialProperty.parkingType || 'Bike & Car');
+      setOwnerResidesHere(initialProperty.ownerResidesHere ?? true);
+      setKitchenType(initialProperty.kitchenType || 'shared_with_owner');
+      setPrivateEntrance(initialProperty.privateEntrance ?? false);
+      setFoodPreference(initialProperty.foodPreference || 'No Preference');
       setDescription(initialProperty.description || '');
       setCity(initialProperty.city || 'Samastipur');
       setArea(initialProperty.area || 'Station Road');
@@ -507,8 +626,22 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
       if (isEditMode && initialProperty && onUpdateProperty) {
         await Promise.resolve(onUpdateProperty({
           ...initialProperty,
+          category,
+          bhkType: category === 'entire_house' ? bhkType : undefined,
+          furnishingStatus,
+          preferredTenant,
+          builtupSqft: category === 'entire_house' ? Number(builtupSqft || 0) : undefined,
+          bathroomsCount: category === 'entire_house' ? Number(bathroomsCount || 0) : undefined,
+          balconiesCount: category === 'entire_house' ? Number(balconiesCount || 0) : undefined,
+          floorNumber: Number(floorNumber || 1),
+          totalFloors: Number(totalFloors || 1),
+          parkingType,
+          ownerResidesHere: category === 'private_room' ? ownerResidesHere : false,
+          kitchenType: category === 'private_room' ? kitchenType : undefined,
+          privateEntrance: category === 'private_room' ? privateEntrance : undefined,
+          foodPreference,
           name,
-          type,
+          type: category === 'entire_house' ? 'Flat' : category === 'private_room' ? 'Room' : type,
           address,
           area,
           city,
@@ -527,9 +660,9 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           electricityRate: Number(electricityRate),
           wifiCost: Number(wifiCost),
           maintenance: Number(maintenance),
-          foodAvailable,
-          foodIncluded,
-          foodCost: foodAvailable ? Number(foodCost) : 0,
+          foodAvailable: category === 'shared_pg' ? foodAvailable : false,
+          foodIncluded: category === 'shared_pg' ? foodIncluded : false,
+          foodCost: (category === 'shared_pg' && foodAvailable) ? Number(foodCost) : 0,
           rules,
           amenities: selectedAmenities,
           image: primaryImage,
@@ -539,17 +672,32 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           verificationStatus
         }));
       } else {
-        const bedsPerRoom = initialRoomType === 'Single' ? 1 : initialRoomType === '2 Sharing' ? 2 : 3;
-        const totalBeds = initialRooms * bedsPerRoom;
+        const roomsToGenerate = category === 'entire_house' ? 1 : initialRooms;
+        const bedsPerRoom = category === 'entire_house' ? 1 : (initialRoomType === 'Single' ? 1 : initialRoomType === '2 Sharing' ? 2 : 3);
+        const totalBeds = category === 'entire_house' ? 1 : (category === 'private_room' ? initialRooms : initialRooms * bedsPerRoom);
 
         await Promise.resolve(onAddProperty({
           ownerId: currentUserId,
+          category,
+          bhkType: category === 'entire_house' ? bhkType : undefined,
+          furnishingStatus,
+          preferredTenant,
+          builtupSqft: category === 'entire_house' ? Number(builtupSqft || 0) : undefined,
+          bathroomsCount: category === 'entire_house' ? Number(bathroomsCount || 0) : undefined,
+          balconiesCount: category === 'entire_house' ? Number(balconiesCount || 0) : undefined,
+          floorNumber: Number(floorNumber || 1),
+          totalFloors: Number(totalFloors || 1),
+          parkingType,
+          ownerResidesHere: category === 'private_room' ? ownerResidesHere : false,
+          kitchenType: category === 'private_room' ? kitchenType : undefined,
+          privateEntrance: category === 'private_room' ? privateEntrance : undefined,
+          foodPreference,
           name,
-          type,
+          type: category === 'entire_house' ? 'Flat' : category === 'private_room' ? 'Room' : type,
           address,
           area,
           city,
-          landmark: landmark || 'Near College Road',
+          landmark: landmark || (category === 'entire_house' ? 'Main Residential Area' : 'Near College Road'),
           pincode,
           latitude,
           longitude,
@@ -566,18 +714,24 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           electricityRate: Number(electricityRate),
           wifiCost: Number(wifiCost),
           maintenance: Number(maintenance),
-          foodAvailable,
-          foodIncluded,
-          foodCost: foodAvailable ? Number(foodCost) : 0,
+          foodAvailable: category === 'shared_pg' ? foodAvailable : false,
+          foodIncluded: category === 'shared_pg' ? foodIncluded : false,
+          foodCost: (category === 'shared_pg' && foodAvailable) ? Number(foodCost) : 0,
           rules,
           amenities: selectedAmenities,
           image: primaryImage,
           images: finalImagesList,
-          description: description || `${name} located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} High speed WiFi, security, and comfortable student accommodation.`,
+          description: description || (
+            category === 'entire_house'
+              ? `${bhkType} (${furnishingStatus}) located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} Ideal for families and working professionals.`
+              : category === 'private_room'
+              ? `Spacious Private Room in owner residence located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} Peaceful private living.`
+              : `${name} located in ${area}, ${city}. ${landmark ? `Landmark: ${landmark}.` : ''} High speed WiFi, security, and comfortable student accommodation.`
+          ),
           ownerName: ownerName || 'RoomSaathi Landlord',
           isActive,
           verificationStatus
-        }, Number(initialRooms)));
+        }, Number(roomsToGenerate)));
       }
 
       setSubmitPhase('success');
@@ -596,12 +750,24 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
     }
   };
 
-  // Reusable Multi-Photo Upload UI (1 to 3 slots)
-  const slotLabels = [
-    { title: 'Cover / Main Photo *', desc: 'Main photo displayed to prospective students (Required)' },
-    { title: 'Room / Interior Photo', desc: 'Bedroom, furniture, or study area (Optional)' },
-    { title: 'Washroom / Common Area', desc: 'Washroom, mess, or premises (Optional)' }
-  ];
+  // Dynamic Photo Slot Labels based on Category
+  const slotLabels = category === 'entire_house'
+    ? [
+        { title: 'Living Room / Main Hall Photo *', desc: 'Main living hall displayed on search cards (Required)' },
+        { title: 'Master Bedroom & Balcony', desc: 'Master bedroom, window or attached balcony (Optional)' },
+        { title: 'Kitchen & Bathroom', desc: 'Modular kitchen or bathroom fixture (Optional)' }
+      ]
+    : category === 'private_room'
+    ? [
+        { title: 'Private Bedroom Photo *', desc: 'Interior photo of the private room with bed (Required)' },
+        { title: 'Attached Washroom / Window', desc: 'Washroom, storage wardrobe or window (Optional)' },
+        { title: 'House Entrance / Common Area', desc: 'Private or common house entrance (Optional)' }
+      ]
+    : [
+        { title: 'Cover / Main Hostel Photo *', desc: 'Exterior front or main entrance photo (Required)' },
+        { title: 'Room & Bed Setup', desc: 'Bed layout, study desk, or almirah (Optional)' },
+        { title: 'Common Area / Dining Mess', desc: 'Dining area, washroom or balcony (Optional)' }
+      ];
 
   const fileInputRefs = [fileInputRef0, fileInputRef1, fileInputRef2];
 
@@ -629,7 +795,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           {validCount === 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] text-slate-500 font-medium">Quick sample:</span>
-              {SAMPLE_PROPERTY_PHOTOS.map((sample, idx) => (
+              {(SAMPLE_PROPERTY_PHOTOS_BY_CAT[category] || SAMPLE_PROPERTY_PHOTOS_BY_CAT.entire_house).map((sample, idx) => (
                 <button
                   key={sample.label}
                   type="button"
@@ -998,14 +1164,381 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           
           {/* TAB 1: BASIC & LOCATION */}
           {activeTab === 'basic' && (
-            <div className="space-y-3.5">
+            <div className="space-y-4">
+              
+              {/* Rental Model / Category Selection */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-800 text-xs">
+                    Rental Category <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    {category === 'entire_house' ? 'Full Unit Lease' : category === 'private_room' ? 'Single Private Room' : 'Bed Sharing Model'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Category 1: Entire House */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCategory('entire_house')}
+                    className={`p-3 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                      category === 'entire_house'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          category === 'entire_house' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          <Home size={16} />
+                        </div>
+                        {category === 'entire_house' && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-xs text-slate-900">Entire House / Flat</h4>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                        1-4 BHK Flat or Independent house leased as 1 complete unit to families or bachelors.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Category 2: Private Room in Residence */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCategory('private_room')}
+                    className={`p-3 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                      category === 'private_room'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          category === 'private_room' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          <DoorOpen size={16} />
+                        </div>
+                        {category === 'private_room' && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-xs text-slate-900">Private Room in Home</h4>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                        1-2 private rooms in your own residence. Dedicated rooms, no bed sharing with strangers.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Category 3: PG / Student Hostel */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCategory('shared_pg')}
+                    className={`p-3 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                      category === 'shared_pg'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          category === 'shared_pg' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          <Building2 size={16} />
+                        </div>
+                        {category === 'shared_pg' && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-xs text-slate-900">PG / Student Hostel</h4>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                        Multi-bed sharing rooms (Bed A, Bed B), mess food, student curfew & warden rules.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* CATEGORY SPECIFIC CONFIGURATION */}
+              {category === 'entire_house' && (
+                <div className="p-3.5 bg-emerald-50/40 border border-emerald-200/80 rounded-2xl space-y-3">
+                  <div className="font-bold text-xs text-emerald-950 flex items-center gap-1.5">
+                    <Home size={14} className="text-emerald-700" />
+                    <span>Entire House / Flat Specifications</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">BHK Configuration *</label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {(['1 RK', '1 BHK', '2 BHK', '3 BHK', '4+ BHK'] as BhkType[]).map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setBhkType(b)}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                            bhkType === b
+                              ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Furnishing Status</label>
+                      <select
+                        value={furnishingStatus}
+                        onChange={e => setFurnishingStatus(e.target.value as FurnishingStatus)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="Unfurnished">Unfurnished</option>
+                        <option value="Semi-Furnished">Semi-Furnished</option>
+                        <option value="Fully Furnished">Fully Furnished</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Built-up Area (Sq. Ft)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 950"
+                        value={builtupSqft || ''}
+                        onChange={e => setBuiltupSqft(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Bathrooms</label>
+                      <select
+                        value={bathroomsCount}
+                        onChange={e => setBathroomsCount(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value={1}>1 Bathroom</option>
+                        <option value={2}>2 Bathrooms</option>
+                        <option value={3}>3 Bathrooms</option>
+                        <option value={4}>4+ Bathrooms</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Balconies</label>
+                      <select
+                        value={balconiesCount}
+                        onChange={e => setBalconiesCount(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value={0}>0 Balcony</option>
+                        <option value={1}>1 Balcony</option>
+                        <option value={2}>2 Balconies</option>
+                        <option value={3}>3+ Balconies</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Floor Level</label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          value={floorNumber}
+                          onChange={e => setFloorNumber(Number(e.target.value))}
+                          placeholder="Floor"
+                          className="w-14 px-2 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                        />
+                        <span className="text-slate-400">/</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={totalFloors}
+                          onChange={e => setTotalFloors(Number(e.target.value))}
+                          placeholder="Total"
+                          className="w-14 px-2 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Parking Available</label>
+                      <select
+                        value={parkingType}
+                        onChange={e => setParkingType(e.target.value as ParkingType)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="Bike & Car">Car & Two-Wheeler</option>
+                        <option value="Bike Only">Two-Wheeler Only</option>
+                        <option value="Car Only">Car Parking Only</option>
+                        <option value="None">Street / No Parking</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Preferred Tenant</label>
+                      <select
+                        value={preferredTenant}
+                        onChange={e => setPreferredTenant(e.target.value as PreferredTenant)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="Family or Bachelors">Family or Bachelors</option>
+                        <option value="Family">Families Only</option>
+                        <option value="Bachelors">Bachelors / Working Professionals</option>
+                        <option value="Female Only">Girls / Working Women Only</option>
+                        <option value="Any">Anyone</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {category === 'private_room' && (
+                <div className="p-3.5 bg-emerald-50/40 border border-emerald-200/80 rounded-2xl space-y-3">
+                  <div className="font-bold text-xs text-emerald-950 flex items-center gap-1.5">
+                    <DoorOpen size={14} className="text-emerald-700" />
+                    <span>Private Room in Home Specifications</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Private Rooms Available</label>
+                      <select
+                        value={initialRooms}
+                        onChange={e => setInitialRooms(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value={1}>1 Private Room</option>
+                        <option value={2}>2 Private Rooms</option>
+                        <option value={3}>3 Private Rooms</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Kitchen Facility</label>
+                      <select
+                        value={kitchenType}
+                        onChange={e => setKitchenType(e.target.value as KitchenType)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="shared_with_owner">Shared kitchen with owner</option>
+                        <option value="private_kitchenette">Private kitchenette / induction</option>
+                        <option value="none">No kitchen access (outside dining)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 p-2 bg-white rounded-xl border border-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={privateEntrance}
+                        onChange={e => setPrivateEntrance(e.target.checked)}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-[11px] font-semibold text-slate-700">Independent private entrance</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white rounded-xl border border-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={ownerResidesHere}
+                        onChange={e => setOwnerResidesHere(e.target.checked)}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-[11px] font-semibold text-slate-700">Owner lives on premises</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Food / Diet Preference</label>
+                      <select
+                        value={foodPreference}
+                        onChange={e => setFoodPreference(e.target.value as FoodPreference)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="No Preference">No Preference</option>
+                        <option value="Veg Only">Strict Vegetarian Only</option>
+                        <option value="Non-Veg Allowed">Non-Veg Allowed</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Preferred Tenant</label>
+                      <select
+                        value={preferredTenant}
+                        onChange={e => setPreferredTenant(e.target.value as PreferredTenant)}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white"
+                      >
+                        <option value="Bachelors">Single Male Student/Prof.</option>
+                        <option value="Female Only">Single Female Student/Prof.</option>
+                        <option value="Any">Any Single Tenant</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {category === 'shared_pg' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Accommodation Type</label>
+                    <select
+                      value={type}
+                      onChange={e => setType(e.target.value as any)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white"
+                    >
+                      <option value="PG">Boys / Girls PG</option>
+                      <option value="Hostel">Student Hostel</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Student Gender / Occupancy</label>
+                    <select
+                      value={preferredTenant}
+                      onChange={e => setPreferredTenant(e.target.value as PreferredTenant)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white"
+                    >
+                      <option value="Bachelors">Boys Only</option>
+                      <option value="Female Only">Girls Only</option>
+                      <option value="Any">Co-ed</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-800 mb-1">
                   Property Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Balaji Student Residency"
+                  placeholder={
+                    category === 'entire_house' 
+                      ? 'e.g. Royal Heights 2BHK Apartment' 
+                      : category === 'private_room' 
+                      ? 'e.g. Verma Niwas - Private Room 1' 
+                      : 'e.g. Balaji Student Residency'
+                  }
                   value={name}
                   onChange={e => {
                     setName(e.target.value);
@@ -1025,30 +1558,14 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Property Type</label>
-                  <select
-                    value={type}
-                    onChange={e => setType(e.target.value as any)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white"
-                  >
-                    <option value="PG">Boys / Girls PG</option>
-                    <option value="Hostel">Student Hostel</option>
-                    <option value="Room">Private Single Room</option>
-                    <option value="Flat">Family / Bachelor Flat</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">City</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white"
-                  />
-                </div>
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">City</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={e => setCity(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1215,7 +1732,13 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             <div className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">Monthly Base Rent (₹) *</label>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    {category === 'entire_house' 
+                      ? 'Monthly Rent for Entire House (₹) *'
+                      : category === 'private_room'
+                      ? 'Monthly Rent per Private Room (₹) *'
+                      : 'Monthly Rent per Bed (₹) *'}
+                  </label>
                   <div className="relative">
                     <IndianRupee size={14} className="absolute left-3 top-2.5 text-slate-400" />
                     <input
@@ -1226,6 +1749,13 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                       required
                     />
                   </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {category === 'entire_house' 
+                      ? 'Total rent for complete flat / house unit'
+                      : category === 'private_room'
+                      ? 'Room rent for 1 tenant (no bed sharing)'
+                      : 'Per-bed sharing rent'}
+                  </span>
                 </div>
 
                 <div>
@@ -1239,6 +1769,9 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                       className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-slate-300"
                     />
                   </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {category === 'entire_house' ? 'Typically 1-2 months advance rent' : 'Refundable deposit upon vacating'}
+                  </span>
                 </div>
               </div>
 
@@ -1250,12 +1783,15 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                     value={brokerage}
                     onChange={e => setBrokerage(Number(e.target.value))}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300"
+                    placeholder="0 (Direct owner listing)"
                   />
                   <span className="text-[10px] text-slate-400">Keep 0 for No Brokerage</span>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">Maintenance / Cleaning (₹/mo)</label>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    {category === 'entire_house' ? 'Society / Maintenance (₹/mo)' : 'Maintenance Charges (₹/mo)'}
+                  </label>
                   <input
                     type="number"
                     value={maintenance}
@@ -1334,42 +1870,51 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800 text-xs">🍲 Food / Mess</label>
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={foodAvailable}
-                        onChange={e => setFoodAvailable(e.target.checked)}
-                        className="rounded text-emerald-600"
-                      />
-                      <span className="text-[11px] text-slate-600">Available</span>
-                    </label>
-                  </div>
-                  {foodAvailable && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="number"
-                        value={foodCost}
-                        onChange={e => setFoodCost(Number(e.target.value))}
-                        className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
-                      />
-                      <span className="text-slate-600">₹/mo</span>
+                {category !== 'entire_house' ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 text-xs">🍲 Food / Mess</label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={foodAvailable}
+                          onChange={e => setFoodAvailable(e.target.checked)}
+                          className="rounded text-emerald-600"
+                        />
+                        <span className="text-[11px] text-slate-600">Available</span>
+                      </label>
                     </div>
-                  )}
-                </div>
+                    {foodAvailable && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="number"
+                          value={foodCost}
+                          onChange={e => setFoodCost(Number(e.target.value))}
+                          className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
+                        />
+                        <span className="text-slate-600">₹/mo</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 flex flex-col justify-center">
+                    <label className="font-bold text-slate-800 text-xs">🍳 Kitchen & Cooking</label>
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                      Private kitchen for tenant self-cooking. No commercial mess fees.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Estimated Total Monthly Cost to Tenant Banner */}
               <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800">Estimated Total Monthly Cost to Tenant</span>
-                  <p className="text-[10px] text-slate-500">Rent + Maintenance + Wi-Fi {foodAvailable ? '+ Food / Mess' : ''}</p>
+                  <p className="text-[10px] text-slate-500">Rent + Maintenance + Wi-Fi {foodAvailable && category !== 'entire_house' ? '+ Food / Mess' : ''}</p>
                 </div>
                 <div className="text-right">
                   <span className="text-base font-extrabold text-emerald-800">
-                    ₹{(Number(baseRent || 0) + Number(maintenance || 0) + Number(wifiCost || 0) + (foodAvailable ? Number(foodCost || 0) : 0)).toLocaleString('en-IN')}
+                    ₹{(Number(baseRent || 0) + Number(maintenance || 0) + Number(wifiCost || 0) + (foodAvailable && category !== 'entire_house' ? Number(foodCost || 0) : 0)).toLocaleString('en-IN')}
                   </span>
                   <span className="text-[10px] text-slate-500 block font-medium">/ month</span>
                 </div>
@@ -1388,10 +1933,17 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedAmenities(COMMON_AMENITY_PRESETS)}
+                      onClick={() => {
+                        const rec = category === 'entire_house' 
+                          ? ENTIRE_HOUSE_AMENITY_PRESETS 
+                          : category === 'private_room' 
+                          ? PRIVATE_ROOM_AMENITY_PRESETS 
+                          : SHARED_PG_AMENITY_PRESETS;
+                        setSelectedAmenities(rec);
+                      }}
                       className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
                     >
-                      Select Common
+                      Select Recommended
                     </button>
                     <span className="text-slate-300">•</span>
                     <button
@@ -1411,7 +1963,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                         type="button"
                         key={a}
                         onClick={() => toggleAmenity(a)}
-                        className={`px-2.5 py-1.5 rounded-xl border text-left transition flex items-center justify-between text-[11px] ${
+                        className={`px-2.5 py-1.5 rounded-xl border text-left transition flex items-center justify-between text-[11px] cursor-pointer ${
                           isSelected
                             ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-900'
                             : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -1455,14 +2007,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   House Rules ({rules.length} active)
                 </label>
                 <div className="space-y-1.5">
-                  {DEFAULT_RULE_PRESETS.map(r => {
+                  {(category === 'entire_house' 
+                    ? ENTIRE_HOUSE_RULE_PRESETS 
+                    : category === 'private_room' 
+                    ? PRIVATE_ROOM_RULE_PRESETS 
+                    : SHARED_PG_RULE_PRESETS
+                  ).map(r => {
                     const isSelected = rules.includes(r);
                     return (
                       <button
                         type="button"
                         key={r}
                         onClick={() => toggleRule(r)}
-                        className={`w-full p-2 rounded-xl border text-left transition flex items-center justify-between text-xs ${
+                        className={`w-full p-2 rounded-xl border text-left transition flex items-center justify-between text-xs cursor-pointer ${
                           isSelected
                             ? 'bg-emerald-50/70 border-emerald-400 text-emerald-950 font-medium'
                             : 'bg-white border-slate-200 text-slate-600'
@@ -1509,8 +2066,16 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
               
               {/* Photo Upload & Verification */}
               {renderPhotoUploadSection(
-                'Property Cover Photo & Media Preview',
-                'Verify or update the photo displayed to prospective students and tenants'
+                category === 'entire_house'
+                  ? 'House Photos & Layout Preview'
+                  : category === 'private_room'
+                  ? 'Private Room & Premises Photos'
+                  : 'Property Cover Photo & Media Preview',
+                category === 'entire_house'
+                  ? 'Attach clear photos of the living room, master bedroom, and kitchen'
+                  : category === 'private_room'
+                  ? 'Attach bedroom, washroom, and entry photos'
+                  : 'Verify or update the photo displayed to prospective students and tenants'
               )}
 
               {/* Initial Rooms Configuration / Existing Inventory Note */}
@@ -1519,6 +2084,52 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   <div className="font-bold text-slate-800 text-xs mb-1">Room & Bed Inventory</div>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     This property currently has rooms and beds configured. To add new rooms, adjust floor allocations, or update individual bed vacancy status, use the <strong>Rooms & Beds</strong> tab directly.
+                  </p>
+                </div>
+              ) : category === 'entire_house' ? (
+                <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/90 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <Home size={16} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs">Full House / Flat Leasing Unit</h4>
+                      <p className="text-[10px] text-slate-500">
+                        Listing registered as 1 independent unit ({bhkType}, {furnishingStatus}).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-100 text-[11px] text-slate-600 flex items-center justify-between">
+                    <span>Configured: <strong>{bhkType} ({builtupSqft || 900} sq.ft)</strong></span>
+                    <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px]">
+                      Single Tenant / Family Lease
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Tenants rent the complete house as a single unit. No room-by-room bed splitting is required.
+                  </p>
+                </div>
+              ) : category === 'private_room' ? (
+                <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/90 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <DoorOpen size={16} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs">Private Room Setup (Single Occupancy)</h4>
+                      <p className="text-[10px] text-slate-500">
+                        {initialRooms} private room(s) will be created in your residence.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-100 text-[11px] text-slate-600 flex items-center justify-between">
+                    <span>Each room: <strong>1 Private Tenant</strong></span>
+                    <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px]">
+                      1 Bed per Room (Private)
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Rooms will be labeled Room 1, Room 2 with full privacy (no stranger bed-sharing).
                   </p>
                 </div>
               ) : (
@@ -1565,7 +2176,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-[10px] font-extrabold uppercase tracking-wider">
-                      {type}
+                      {category === 'entire_house' ? 'Entire House' : category === 'private_room' ? 'Private Room' : type}
                     </span>
                     <h4 className="font-bold text-xs sm:text-sm text-white truncate max-w-[200px] sm:max-w-[320px]">
                       {name || 'Untitled Property'}
@@ -1587,7 +2198,15 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Inventory</span>
-                    <span className="font-semibold text-white">{isEditMode ? 'Existing Rooms' : `${initialRooms} Rooms (${initialRoomType})`}</span>
+                    <span className="font-semibold text-white">
+                      {isEditMode 
+                        ? 'Existing Setup' 
+                        : category === 'entire_house' 
+                        ? `1 Unit (${bhkType})` 
+                        : category === 'private_room' 
+                        ? `${initialRooms} Private Rooms` 
+                        : `${initialRooms} Rooms (${initialRoomType})`}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Photos</span>
