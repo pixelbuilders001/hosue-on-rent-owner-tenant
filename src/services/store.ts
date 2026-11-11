@@ -1,11 +1,9 @@
-import { OwnerProfile, TenantProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, UserRole } from '../types';
+import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint } from '../types';
 
 const STORAGE_KEY = 'roomsaathi_clean_v2';
 
 export interface AppState {
-  currentRole: UserRole;
   profile: OwnerProfile;
-  tenantProfile: TenantProfile;
   properties: Property[];
   rooms: Room[];
   beds: Bed[];
@@ -14,18 +12,7 @@ export interface AppState {
   rentRecords: RentRecord[];
   complaints: Complaint[];
   activePropertyId: string;
-  savedPropertyIds: string[];
 }
-
-const DEFAULT_TENANT_PROFILE: TenantProfile = {
-  id: 'tenant-default',
-  fullName: 'User / Tenant',
-  phone: '',
-  email: '',
-  avatarUrl: '',
-  role: 'tenant',
-  collegeOrWork: ''
-};
 
 const DEFAULT_PROFILE: OwnerProfile = {
   id: 'owner-default',
@@ -40,23 +27,9 @@ const DEFAULT_PROFILE: OwnerProfile = {
   city: 'Samastipur, Bihar'
 };
 
-const DEFAULT_PROPERTIES: Property[] = [];
-
-const DEFAULT_ROOMS: Room[] = [];
-const DEFAULT_BEDS: Bed[] = [];
-
-const DEFAULT_TENANTS: Tenant[] = [];
-const DEFAULT_LEADS: Lead[] = [];
-
-const DEFAULT_RENT_RECORDS: RentRecord[] = [];
-
-const DEFAULT_COMPLAINTS: Complaint[] = [];
-
 export function getInitialState(): AppState {
   const defaultInitial: AppState = {
-    currentRole: 'owner',
     profile: DEFAULT_PROFILE,
-    tenantProfile: DEFAULT_TENANT_PROFILE,
     properties: [],
     rooms: [],
     beds: [],
@@ -64,8 +37,7 @@ export function getInitialState(): AppState {
     leads: [],
     rentRecords: [],
     complaints: [],
-    activePropertyId: '',
-    savedPropertyIds: []
+    activePropertyId: ''
   };
 
   if (typeof window === 'undefined') {

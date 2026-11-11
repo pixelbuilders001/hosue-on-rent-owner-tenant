@@ -1,5 +1,5 @@
 export type Language = 'en' | 'hi';
-export type UserRole = 'owner' | 'tenant';
+export type UserRole = 'owner';
 
 export interface OwnerProfile {
   id: string;
@@ -12,19 +12,6 @@ export interface OwnerProfile {
   businessName: string;
   isKycVerified: boolean;
   city: string;
-}
-
-export interface TenantProfile {
-  id: string;
-  fullName: string;
-  phone: string;
-  email: string;
-  avatarUrl: string;
-  role: 'tenant';
-  collegeOrWork: string;
-  activePropertyId?: string;
-  activeRoomNumber?: string;
-  activeBedLabel?: string;
 }
 
 export type PropertyCategory = 'entire_house' | 'private_room' | 'shared_pg';

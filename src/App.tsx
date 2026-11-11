@@ -111,7 +111,6 @@ export function App() {
         setShowAuthModal(false);
         setState(prev => ({
           ...prev,
-          currentRole: 'owner',
           profile: {
             ...prev.profile,
             fullName: realName || prev.profile.fullName,

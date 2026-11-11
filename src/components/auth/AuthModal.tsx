@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { OwnerProfile } from '../../types';
-import { X, ShieldCheck, Check, Sparkles, Phone, Building2, Lock, LogOut } from 'lucide-react';
+import { X, Check, LogOut } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 
 interface AuthModalProps {
@@ -22,22 +22,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLogout,
   userEmail
 }) => {
+  const [inputPhone, setInputPhone] = useState(profile.phone);
+  const [inputName, setInputName] = useState(profile.fullName);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
   if (!isOpen) return null;
 
   const avatarUrl = profile.avatarUrl;
   const displayName = profile.fullName || 'Host';
   const userInitial = displayName.charAt(0).toUpperCase() || 'H';
 
-  const [inputPhone, setInputPhone] = useState(profile.phone);
-  const [inputName, setInputName] = useState(profile.fullName);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
   const handleGoogleSignIn = async () => {
     if (supabase) {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/?role=owner`
+          redirectTo: `${window.location.origin}/`
         }
       });
     } else {

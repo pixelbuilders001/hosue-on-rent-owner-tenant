@@ -5,15 +5,9 @@ import {
   Bell, 
   ChevronDown, 
   Plus, 
-  GraduationCap,
-  Sparkles,
-  UsersRound,
-  Compass,
-  Lock,
-  LogOut,
-  User
+  LogOut
 } from 'lucide-react';
-import { OwnerProfile, TenantProfile, Property, Language, UserRole } from '../../types';
+import { OwnerProfile, Property, Language } from '../../types';
 import { t } from '../../services/i18n';
 
 interface NavbarProps {
