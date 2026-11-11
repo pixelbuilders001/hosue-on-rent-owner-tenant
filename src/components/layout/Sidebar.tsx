@@ -6,13 +6,9 @@ import {
   UsersRound, 
   ReceiptIndianRupee, 
   Wrench, 
-  Settings,
-  Compass,
-  Home,
-  Clock,
-  Heart
+  Settings
 } from 'lucide-react';
-import { Language, UserRole } from '../../types';
+import { Language } from '../../types';
 import { t } from '../../services/i18n';
 
 export type TabType = 
@@ -22,35 +18,26 @@ export type TabType =
   | 'tenants' 
   | 'billing' 
   | 'complaints' 
-  | 'settings'
-  // Tenant specific tabs
-  | 'explore'
-  | 'mystay'
-  | 'myinquiries'
-  | 'saved';
+  | 'settings';
 
 interface SidebarProps {
-  currentRole: UserRole;
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
   language: Language;
   leadsCount: number;
   dueRentsCount: number;
   openComplaintsCount: number;
-  savedCount: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentRole,
   currentTab,
   onSelectTab,
   language,
   leadsCount,
   dueRentsCount,
-  openComplaintsCount,
-  savedCount
+  openComplaintsCount
 }) => {
-  const ownerNavItems = [
+  const navItems = [
     {
       id: 'dashboard' as TabType,
       label: t(language, 'dashboard'),
@@ -95,48 +82,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
-  const tenantNavItems = [
-    {
-      id: 'explore' as TabType,
-      label: 'Explore Rooms (कमरे खोजें)',
-      icon: Compass,
-      badge: 0
-    },
-    {
-      id: 'mystay' as TabType,
-      label: 'My Room & Bills (मेरा कमरा)',
-      icon: Home,
-      badge: 0
-    },
-    {
-      id: 'myinquiries' as TabType,
-      label: 'Visits & Inquiries (विज़िट)',
-      icon: Clock,
-      badge: 0
-    },
-    {
-      id: 'saved' as TabType,
-      label: 'Saved Rooms (पसंदीदा)',
-      icon: Heart,
-      badge: savedCount
-    },
-    {
-      id: 'complaints' as TabType,
-      label: 'Maintenance (शिकायतें)',
-      icon: Wrench,
-      badge: 0
-    }
-  ];
-
-  const navItems = currentRole === 'owner' ? ownerNavItems : tenantNavItems;
-
   return (
     <>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:flex-col w-64 bg-white border-r border-slate-200 shrink-0 min-h-[calc(100vh-4rem)] p-4">
         
         <div className="mb-3 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          {currentRole === 'owner' ? 'Owner OS · Portal' : 'Tenant Portal · Samastipur'}
+          Owner OS · Portal
         </div>
 
         <div className="space-y-1">
@@ -147,11 +99,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
                   isActive
-                    ? currentRole === 'owner'
-                      ? 'bg-emerald-800 text-white shadow-sm shadow-emerald-900/10'
-                      : 'bg-blue-600 text-white shadow-sm shadow-blue-900/10'
+                    ? 'bg-emerald-800 text-white shadow-sm shadow-emerald-900/10'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
@@ -175,14 +125,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </div>
 
-        {/* Bottom PWA notice */}
+        {/* Bottom Partner notice */}
         <div className="mt-auto pt-6 border-t border-slate-100">
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span>📱</span> RoomSaathi Web App
+              <span>🏢</span> RoomSaathi Host OS
             </div>
             <p className="text-slate-500 mt-1 leading-relaxed text-[11px]">
-              Tap "Add to Home Screen" on mobile for instant zero-login access.
+              Dedicated Landlord Management Suite for properties, rooms, tenants & billing.
             </p>
           </div>
         </div>
@@ -199,14 +149,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSelectTab(item.id)}
               className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl relative ${
                 isActive 
-                  ? currentRole === 'owner' ? 'text-emerald-800 font-bold' : 'text-blue-600 font-bold'
+                  ? 'text-emerald-800 font-bold'
                   : 'text-slate-500'
               }`}
             >
               <div className="relative">
                 <Icon size={19} className={
                   isActive 
-                    ? currentRole === 'owner' ? 'text-emerald-700' : 'text-blue-600'
+                    ? 'text-emerald-700'
                     : 'text-slate-400'
                 } />
                 {item.badge > 0 && (
@@ -216,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
               <span className="text-[10px] mt-0.5 max-w-[60px] truncate">
-                {item.id === 'dashboard' ? 'Home' : item.id === 'rooms' ? 'Rooms' : item.id === 'explore' ? 'Explore' : item.id === 'mystay' ? 'My Stay' : item.id === 'leads' ? 'Leads' : item.id === 'billing' ? 'Billing' : 'Menu'}
+                {item.id === 'dashboard' ? 'Home' : item.id === 'rooms' ? 'Rooms' : item.id === 'leads' ? 'Leads' : item.id === 'tenants' ? 'Tenants' : item.id === 'billing' ? 'Billing' : 'Menu'}
               </span>
             </button>
           );

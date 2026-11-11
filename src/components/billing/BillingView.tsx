@@ -41,7 +41,19 @@ export const BillingView: React.FC<BillingViewProps> = ({
   onViewReceipt
 }) => {
   const [activeTab, setActiveTab] = useState<'khata' | 'meter_calc'>('khata');
-  const [selectedMonth, setSelectedMonth] = useState('October 2026');
+  const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const allAvailableMonths = Array.from(new Set([
+    currentMonthName,
+    'October 2026',
+    'September 2026',
+    ...rentRecords.filter(r => r.propertyId === property.id).map(r => r.month).filter(Boolean)
+  ]));
+
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    // Pick month with existing records if available, otherwise current month
+    const hasCurrent = rentRecords.some(r => r.propertyId === property.id && r.month === currentMonthName);
+    return hasCurrent ? currentMonthName : 'October 2026';
+  });
 
   // Electricity Calculator State
   const [calcRoomNumber, setCalcRoomNumber] = useState('101');
@@ -64,18 +76,64 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const [newBillUnits, setNewBillUnits] = useState(0);
   const [newBillAmount, setNewBillAmount] = useState(4000);
 
+  // 1. All active tenants in this property
+  const propTenants = tenants.filter(t => t.propertyId === property.id && t.status !== 'vacated');
+
+  // 2. All rent records for this property matching selected month
   const propRecords = rentRecords.filter(r => r.propertyId === property.id && r.month === selectedMonth);
-  const propTenants = tenants.filter(t => t.propertyId === property.id && t.status === 'active');
 
-  const totalCollected = propRecords
-    .filter(r => r.status === 'paid')
-    .reduce((sum, r) => sum + r.totalAmount, 0);
+  // 3. Build unified rows so EVERY active tenant is guaranteed to appear in the ledger
+  const unifiedEntries: Array<{
+    key: string;
+    tenant: Tenant;
+    record?: RentRecord;
+  }> = [];
 
-  const totalPending = propRecords
-    .filter(r => r.status === 'pending' || r.status === 'overdue')
-    .reduce((sum, r) => sum + r.totalAmount, 0);
+  propTenants.forEach(tenant => {
+    const rec = propRecords.find(r => r.tenantId === tenant.id || r.tenantName?.toLowerCase() === tenant.fullName?.toLowerCase());
+    unifiedEntries.push({
+      key: `tenant-${tenant.id}`,
+      tenant,
+      record: rec
+    });
+  });
 
-  const overdueCount = propRecords.filter(r => r.status === 'overdue').length;
+  // Also include any orphan rent records for this month
+  propRecords.forEach(rec => {
+    if (!unifiedEntries.some(e => e.record?.id === rec.id)) {
+      const dummyTenant: Tenant = {
+        id: rec.tenantId,
+        propertyId: rec.propertyId,
+        roomNumber: rec.roomNumber,
+        fullName: rec.tenantName,
+        phone: '',
+        emergencyPhone: '',
+        collegeOrWork: '',
+        idProofType: 'Aadhaar',
+        idProofNumber: '',
+        checkInDate: '',
+        monthlyRent: rec.baseRent,
+        depositPaid: 0,
+        status: 'active',
+        policeVerificationStatus: 'submitted'
+      };
+      unifiedEntries.push({
+        key: `rec-${rec.id}`,
+        tenant: dummyTenant,
+        record: rec
+      });
+    }
+  });
+
+  const totalCollected = unifiedEntries
+    .filter(e => e.record?.status === 'paid')
+    .reduce((sum, e) => sum + (e.record?.totalAmount || 0), 0);
+
+  const totalPending = unifiedEntries
+    .filter(e => !e.record || e.record.status === 'pending' || e.record.status === 'overdue')
+    .reduce((sum, e) => sum + (e.record ? e.record.totalAmount : e.tenant.monthlyRent), 0);
+
+  const overdueCount = unifiedEntries.filter(e => e.record?.status === 'overdue').length;
 
   // Meter calculations
   const consumedUnits = Math.max(0, currReading - prevReading);
@@ -370,9 +428,9 @@ export const BillingView: React.FC<BillingViewProps> = ({
                   onChange={e => setSelectedMonth(e.target.value)}
                   className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-300 bg-white"
                 >
-                  <option>October 2026</option>
-                  <option>September 2026</option>
-                  <option>August 2026</option>
+                  {allAvailableMonths.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               </div>
 
@@ -380,13 +438,13 @@ export const BillingView: React.FC<BillingViewProps> = ({
               {totalPending > 0 && (
                 <button
                   onClick={() => {
-                    const pendingTenants = propRecords.filter(r => r.status !== 'paid');
-                    if (pendingTenants.length > 0) {
-                      const first = pendingTenants[0];
-                      const t = propTenants.find(x => x.id === first.tenantId);
+                    const pendingEntries = unifiedEntries.filter(e => !e.record || e.record.status !== 'paid');
+                    if (pendingEntries.length > 0) {
+                      const first = pendingEntries[0];
+                      const dueAmt = first.record ? first.record.totalAmount : first.tenant.monthlyRent;
                       openWhatsApp(
-                        t?.phone || '',
-                        `नमस्ते ${first.tenantName} जी, ${property.name} का ${selectedMonth} का किराया ₹${first.totalAmount} बकाया है। कृपया UPI पर भुगतान करें: ${profile.upiId}`
+                        first.tenant.phone || '',
+                        `नमस्ते ${first.tenant.fullName} जी, ${property.name} का ${selectedMonth} का किराया ₹${dueAmt} बकाया है। कृपया UPI पर भुगतान करें: ${profile.upiId}`
                       );
                     }
                   }}
@@ -411,89 +469,143 @@ export const BillingView: React.FC<BillingViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {propRecords.map(record => {
-                    const isPaid = record.status === 'paid';
-                    const isOverdue = record.status === 'overdue';
-                    const tenant = propTenants.find(t => t.id === record.tenantId);
+                  {unifiedEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        No active residents or rent records found for this property.
+                      </td>
+                    </tr>
+                  ) : (
+                    unifiedEntries.map(entry => {
+                      const record = entry.record;
+                      const tenant = entry.tenant;
+                      const isPaid = record?.status === 'paid';
+                      const isOverdue = record?.status === 'overdue';
+                      const isPending = record?.status === 'pending';
+                      const amount = record ? record.totalAmount : tenant.monthlyRent;
 
-                    return (
-                      <tr key={record.id} className="hover:bg-slate-50/70 transition">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900 text-xs sm:text-sm">
-                            Room {record.roomNumber} · {record.tenantName}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            Due: {record.dueDate} {record.paidDate && `· Paid on ${record.paidDate}`}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-4 font-medium text-slate-700">
-                          ₹{record.baseRent.toLocaleString('en-IN')}
-                        </td>
-
-                        <td className="py-3 px-4">
-                          {record.electricityUnits ? (
-                            <div>
-                              <span className="font-semibold text-slate-900">₹{record.electricityAmount}</span>
-                              <span className="text-[11px] text-slate-400 block">({record.electricityUnits} units)</span>
+                      return (
+                        <tr key={entry.key} className="hover:bg-slate-50/70 transition">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 text-xs sm:text-sm">
+                              Room {tenant.roomNumber || record?.roomNumber || 'Unit'} · {tenant.fullName || record?.tenantName}
                             </div>
-                          ) : (
-                            <span className="text-slate-400">Included</span>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-4">
-                          <span className="font-extrabold text-sm text-slate-900">
-                            ₹{record.totalAmount.toLocaleString('en-IN')}
-                          </span>
-                        </td>
-
-                        <td className="py-3 px-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            isPaid
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : isOverdue
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {record.status}
-                          </span>
-                        </td>
-
-                        <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                          {isPaid ? (
-                            <button
-                              onClick={() => onViewReceipt(record)}
-                              className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-lg transition inline-flex items-center gap-1"
-                            >
-                              <Receipt size={13} /> Receipt
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => setPayTarget(record)}
-                                className="px-2.5 py-1 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition shadow-2xs"
-                              >
-                                Mark Paid
-                              </button>
-                              {tenant && (
-                                <button
-                                  onClick={() => openWhatsApp(
-                                    tenant.phone,
-                                    `नमस्ते ${tenant.fullName} जी, ${property.name} का ${record.month} का किराया ₹${record.totalAmount} बकाया है। कृपया UPI पर भेजें: ${profile.upiId}`
-                                  )}
-                                  className="p-1 text-emerald-700 hover:bg-emerald-50 rounded-lg transition inline-block align-middle"
-                                  title="WhatsApp Reminder"
-                                >
-                                  <Share2 size={15} />
-                                </button>
+                            <div className="text-[11px] text-slate-500">
+                              {record ? (
+                                <>Due: {record.dueDate} {record.paidDate && `· Paid on ${record.paidDate}`}</>
+                              ) : (
+                                <>Active Tenant · Phone: {tenant.phone || 'N/A'}</>
                               )}
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-4 font-medium text-slate-700">
+                            ₹{(record ? record.baseRent : tenant.monthlyRent).toLocaleString('en-IN')}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            {record?.electricityUnits ? (
+                              <div>
+                                <span className="font-semibold text-slate-900">₹{record.electricityAmount}</span>
+                                <span className="text-[11px] text-slate-400 block">({record.electricityUnits} units)</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">Standard</span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className="font-extrabold text-sm text-slate-900">
+                              ₹{amount.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              isPaid
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : isOverdue
+                                ? 'bg-rose-100 text-rose-800'
+                                : isPending
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-700 border border-slate-300'
+                            }`}>
+                              {record ? record.status : 'Bill Pending'}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                            {isPaid && record ? (
+                              <button
+                                onClick={() => onViewReceipt(record)}
+                                className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-lg transition inline-flex items-center gap-1"
+                              >
+                                <Receipt size={13} /> Receipt
+                              </button>
+                            ) : record ? (
+                              <>
+                                <button
+                                  onClick={() => setPayTarget(record)}
+                                  className="px-2.5 py-1 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition shadow-2xs"
+                                >
+                                  Mark Paid
+                                </button>
+                                {tenant.phone && (
+                                  <button
+                                    onClick={() => openWhatsApp(
+                                      tenant.phone,
+                                      `नमस्ते ${tenant.fullName} जी, ${property.name} का ${record.month} का किराया ₹${record.totalAmount} बकाया है। कृपया UPI पर भेजें: ${profile.upiId}`
+                                    )}
+                                    className="p-1 text-emerald-700 hover:bg-emerald-50 rounded-lg transition inline-block align-middle"
+                                    title="WhatsApp Reminder"
+                                  >
+                                    <Share2 size={15} />
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    onRecordRentPayment({
+                                      tenantId: tenant.id,
+                                      tenantName: tenant.fullName,
+                                      propertyId: property.id,
+                                      propertyName: property.name,
+                                      roomNumber: tenant.roomNumber || 'Unit',
+                                      month: selectedMonth,
+                                      baseRent: tenant.monthlyRent,
+                                      wifiAmount: 0,
+                                      foodAmount: 0,
+                                      otherAmount: 0,
+                                      totalAmount: tenant.monthlyRent,
+                                      status: 'pending',
+                                      dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
+                                >
+                                  Create Bill / Pay
+                                </button>
+                                {tenant.phone && (
+                                  <button
+                                    onClick={() => openWhatsApp(
+                                      tenant.phone,
+                                      `नमस्ते ${tenant.fullName} जी, ${property.name} का ${selectedMonth} का किराया ₹${tenant.monthlyRent} नियत है। कृपया UPI पर भेजें: ${profile.upiId}`
+                                    )}
+                                    className="p-1 text-emerald-700 hover:bg-emerald-50 rounded-lg transition inline-block align-middle"
+                                    title="WhatsApp Reminder"
+                                  >
+                                    <Share2 size={15} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

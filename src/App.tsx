@@ -11,10 +11,7 @@ import { SettingsView } from './components/settings/SettingsView';
 import { AddPropertyModal } from './components/common/AddPropertyModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { ReceiptModal } from './components/billing/ReceiptModal';
-import { TenantExploreView } from './components/tenant/TenantExploreView';
-import { TenantRoomDetailModal } from './components/tenant/TenantRoomDetailModal';
-import { TenantMyStayView } from './components/tenant/TenantMyStayView';
-import { TenantInquiriesView } from './components/tenant/TenantInquiriesView';
+
 import { Building2, Plus, Lock } from 'lucide-react';
 import { 
   getInitialState, 
@@ -46,9 +43,7 @@ import {
   RentRecord, 
   Complaint, 
   OwnerProfile, 
-  TenantProfile, 
-  Language, 
-  UserRole 
+  Language 
 } from './types';
 
 export function App() {
@@ -65,7 +60,6 @@ export function App() {
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedReceiptRecord, setSelectedReceiptRecord] = useState<RentRecord | null>(null);
-  const [selectedTenantProperty, setSelectedTenantProperty] = useState<Property | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   // Sync to localStorage on every state change
@@ -97,49 +91,36 @@ export function App() {
         setCurrentUserId(user.id);
         setUserEmail(user.email || '');
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlRole = urlParams.get('role');
-
         const { data: prof } = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
-
-        let targetRole: UserRole | null = null;
-        if (urlRole === 'owner' || urlRole === 'tenant') {
-          targetRole = urlRole;
-          await client.from('profiles').update({ role: targetRole }).eq('id', user.id);
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (prof?.role === 'owner' || prof?.role === 'tenant') {
-          targetRole = prof.role as UserRole;
-        }
 
         const realAvatar = prof?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
         const realName = prof?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '';
         const realPhone = prof?.phone || user.phone || '';
 
-        if (targetRole) {
-          setShowAuthModal(false);
-          setState(prev => ({
-            ...prev,
-            currentRole: targetRole!,
-            profile: targetRole === 'owner' ? {
-              ...prev.profile,
-              fullName: realName || prev.profile.fullName,
-              phone: realPhone || prev.profile.phone,
-              email: user.email || prev.profile.email,
-              avatarUrl: realAvatar
-            } : prev.profile,
-            tenantProfile: targetRole === 'tenant' ? {
-              ...prev.tenantProfile,
-              fullName: realName || prev.tenantProfile.fullName,
-              phone: realPhone || prev.tenantProfile.phone,
-              email: user.email || prev.tenantProfile.email,
-              avatarUrl: realAvatar
-            } : prev.tenantProfile
-          }));
-          setCurrentTab(targetRole === 'owner' ? 'dashboard' : 'explore');
-        } else {
-          // If no role set yet, prompt the user with the role chooser modal
-          setShowAuthModal(true);
+        // Ensure profile role is marked as owner
+        if (!prof || prof.role !== 'owner') {
+          await client.from('profiles').upsert({
+            id: user.id,
+            role: 'owner',
+            full_name: realName,
+            phone: realPhone,
+            avatar_url: realAvatar
+          });
         }
+
+        setShowAuthModal(false);
+        setState(prev => ({
+          ...prev,
+          currentRole: 'owner',
+          profile: {
+            ...prev.profile,
+            fullName: realName || prev.profile.fullName,
+            phone: realPhone || prev.profile.phone,
+            email: user.email || prev.profile.email,
+            avatarUrl: realAvatar
+          }
+        }));
+        setCurrentTab('dashboard');
       };
 
       client.auth.getSession().then(({ data: { session } }) => {
@@ -168,9 +149,9 @@ export function App() {
     }
   }, []);
 
-  // Filter properties based on role and authentication
-  const displayProperties = state.currentRole === 'owner'
-    ? (isAuthenticated && currentUserId ? state.properties.filter(p => p.ownerId === currentUserId) : [])
+  // Filter properties based on authentication (only show host's properties if authenticated)
+  const displayProperties = isAuthenticated && currentUserId
+    ? state.properties.filter(p => p.ownerId === currentUserId)
     : state.properties;
 
   const activeProperty = displayProperties.find(p => p.id === state.activePropertyId) || displayProperties[0] || null;
@@ -193,7 +174,6 @@ export function App() {
   const dueRentsCount = propRents.filter(r => r.status === 'overdue' || r.status === 'pending').length;
   const openComplaintsCount = propComplaints.filter(c => c.status !== 'resolved').length;
   const totalUnreadCount = leadsCount + openComplaintsCount;
-  const savedCount = state.savedPropertyIds?.length || 0;
 
   // Logout Handler
   const handleLogout = async () => {
@@ -212,37 +192,8 @@ export function App() {
         phone: '',
         email: '',
         avatarUrl: ''
-      },
-      tenantProfile: {
-        ...prev.tenantProfile,
-        fullName: 'User / Tenant',
-        phone: '',
-        email: '',
-        avatarUrl: ''
       }
     }));
-  };
-
-  // Role Switcher handler (locked when logged in)
-  const handleSelectRole = (role: UserRole) => {
-    if (isAuthenticated && role !== state.currentRole) {
-      alert(`You are currently logged in as a ${state.currentRole === 'owner' ? 'Host' : 'Tenant'}. Please log out first to switch accounts.`);
-      return;
-    }
-    setState(prev => ({ ...prev, currentRole: role }));
-    if (role === 'owner') {
-      setCurrentTab('dashboard');
-    } else {
-      setCurrentTab('explore');
-    }
-    const client = supabase;
-    if (client) {
-      client.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          client.from('profiles').update({ role }).eq('id', user.id).then();
-        }
-      });
-    }
   };
 
   // Toggle bed status cycle: available -> occupied -> reserved -> available
@@ -384,14 +335,14 @@ export function App() {
       propertyId: lead.propertyId,
       propertyName: lead.propertyName,
       roomNumber: targetRoom?.roomNumber || '101',
-      month: 'October 2026',
+      month: new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }),
       baseRent: rent,
       wifiAmount: 150,
       foodAmount: 0,
       otherAmount: 0,
       totalAmount: rent + 150,
       status: 'pending',
-      dueDate: '2026-10-05'
+      dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`
     };
 
     syncTenantToSupabase(newTenant, newRent);
@@ -459,14 +410,14 @@ export function App() {
       propertyId: newTenant.propertyId,
       propertyName: state.properties.find(p => p.id === newTenant.propertyId)?.name || activeProperty?.name || 'Property',
       roomNumber: newTenant.roomNumber || 'Unit',
-      month: 'October 2026',
+      month: new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }),
       baseRent: newTenant.monthlyRent,
       wifiAmount: 150,
       foodAmount: 0,
       otherAmount: 0,
       totalAmount: newTenant.monthlyRent + 150,
       status: 'pending',
-      dueDate: '2026-10-05'
+      dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`
     };
 
     syncTenantToSupabase(tenant, rentRec);
@@ -720,33 +671,19 @@ export function App() {
     }));
   };
 
-  // Save / Bookmark toggle
-  const handleToggleSave = (propId: string) => {
-    setState(prev => {
-      const exists = prev.savedPropertyIds.includes(propId);
-      const next = exists ? prev.savedPropertyIds.filter(id => id !== propId) : [...prev.savedPropertyIds, propId];
-      return { ...prev, savedPropertyIds: next };
-    });
-  };
+
 
   // Profile updates
   const handleUpdateProfile = (profile: OwnerProfile) => {
     setState(prev => ({ ...prev, profile }));
   };
 
-  const handleUpdateTenantProfile = (tenantProfile: TenantProfile) => {
-    setState(prev => ({ ...prev, tenantProfile }));
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-16 lg:pb-0 overflow-x-hidden w-full">
       
-      {/* Top Navbar with Role Switcher */}
+      {/* Top Navbar */}
       <Navbar
-        currentRole={state.currentRole}
-        onSelectRole={handleSelectRole}
         profile={state.profile}
-        tenantProfile={state.tenantProfile}
         properties={displayProperties}
         activePropertyId={state.activePropertyId}
         onSelectProperty={id => setState(p => ({ ...p, activePropertyId: id }))}
@@ -762,75 +699,70 @@ export function App() {
       {/* Main App Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex min-w-0">
         
-        {/* Role-Aware Sidebar */}
+        {/* Host Portal Sidebar */}
         <Sidebar
-          currentRole={state.currentRole}
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           language={language}
           leadsCount={leadsCount}
           dueRentsCount={dueRentsCount}
           openComplaintsCount={openComplaintsCount}
-          savedCount={savedCount}
         />
 
         {/* Tab View Container */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto min-w-0 w-full">
           
-          {/* OWNER VIEWS */}
-          {state.currentRole === 'owner' && (
+          {!activeProperty && currentTab !== 'settings' ? (
+            <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Building2 size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">
+                {isAuthenticated ? `Welcome, ${state.profile.fullName || 'Host'}!` : 'RoomSaathi Host Portal'}
+              </h2>
+              <p className="text-sm text-slate-500 mb-6">
+                {isAuthenticated
+                  ? "You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically."
+                  : "Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely."}
+              </p>
+              <button
+                onClick={handleOpenAddProperty}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <Plus size={18} />
+                    Add Your First Property
+                  </>
+                ) : (
+                  <>
+                    <Lock size={16} />
+                    Sign In to List Property
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
             <>
-              {!activeProperty && currentTab !== 'settings' ? (
-                <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
-                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Building2 size={32} />
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-800 mb-2">
-                    {isAuthenticated ? `Welcome, ${state.profile.fullName || 'Host'}!` : 'RoomSaathi Host Portal'}
-                  </h2>
-                  <p className="text-sm text-slate-500 mb-6">
-                    {isAuthenticated
-                      ? "You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically."
-                      : "Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely."}
-                  </p>
-                  <button
-                    onClick={handleOpenAddProperty}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                  >
-                    {isAuthenticated ? (
-                      <>
-                        <Plus size={18} />
-                        Add Your First Property
-                      </>
-                    ) : (
-                      <>
-                        <Lock size={16} />
-                        Sign In to List Property
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {currentTab === 'dashboard' && (
-                    <OverviewView
-                      property={activeProperty}
-                      rooms={state.rooms}
-                      beds={state.beds}
-                      tenants={state.tenants}
-                      leads={state.leads}
-                      rentRecords={state.rentRecords}
-                      complaints={state.complaints}
-                      language={language}
-                      onNavigateTab={setCurrentTab}
-                      onToggleBedStatus={handleToggleBedStatus}
-                      onOpenQuickRent={() => setCurrentTab('billing')}
-                      onOpenMeterCalc={() => setCurrentTab('billing')}
-                      onOpenAddProperty={handleOpenAddProperty}
-                      onTogglePropertyStatus={handleTogglePropertyStatus}
-                      onEditProperty={(prop) => setEditingProperty(prop)}
-                    />
-                  )}
+              {currentTab === 'dashboard' && (
+                <OverviewView
+                  property={activeProperty}
+                  rooms={state.rooms}
+                  beds={state.beds}
+                  tenants={state.tenants}
+                  leads={state.leads}
+                  rentRecords={state.rentRecords}
+                  complaints={state.complaints}
+                  language={language}
+                  onNavigateTab={setCurrentTab}
+                  onToggleBedStatus={handleToggleBedStatus}
+                  onOpenQuickRent={() => setCurrentTab('billing')}
+                  onOpenMeterCalc={() => setCurrentTab('billing')}
+                  onOpenAddProperty={handleOpenAddProperty}
+                  onTogglePropertyStatus={handleTogglePropertyStatus}
+                  onEditProperty={(prop) => setEditingProperty(prop)}
+                />
+              )}
 
               {currentTab === 'rooms' && (
                 <RoomsBedsView
@@ -893,84 +825,15 @@ export function App() {
                   onAddComplaint={handleAddComplaint}
                 />
               )}
-                </>
-              )}
-
-              {currentTab === 'settings' && (
-                <SettingsView
-                  profile={state.profile}
-                  language={language}
-                  onUpdateProfile={handleUpdateProfile}
-                />
-              )}
             </>
           )}
 
-          {/* TENANT VIEWS */}
-          {state.currentRole === 'tenant' && (
-            <>
-              {currentTab === 'explore' && (
-                <TenantExploreView
-                  properties={state.properties}
-                  rooms={state.rooms}
-                  beds={state.beds}
-                  savedPropertyIds={state.savedPropertyIds}
-                  language={language}
-                  onSelectProperty={setSelectedTenantProperty}
-                  onToggleSave={handleToggleSave}
-                />
-              )}
-
-              {currentTab === 'mystay' && (
-                <TenantMyStayView
-                  tenantProfile={state.tenantProfile}
-                  property={activeProperty}
-                  rentRecords={state.rentRecords}
-                  complaints={state.complaints}
-                  language={language}
-                  onViewReceipt={setSelectedReceiptRecord}
-                  onSubmitComplaint={handleAddComplaint}
-                />
-              )}
-
-              {currentTab === 'myinquiries' && (
-                <TenantInquiriesView
-                  leads={state.leads}
-                  properties={state.properties}
-                  tenantPhone={state.tenantProfile.phone}
-                />
-              )}
-
-              {currentTab === 'saved' && (
-                <div className="space-y-4">
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                    <h1 className="text-xl font-bold text-slate-900 tracking-tight">Saved Rooms & PGs (पसंदीदा)</h1>
-                    <p className="text-xs text-slate-500 mt-1">Properties you have bookmarked for comparison.</p>
-                  </div>
-                  <TenantExploreView
-                    properties={state.properties.filter(p => state.savedPropertyIds.includes(p.id))}
-                    rooms={state.rooms}
-                    beds={state.beds}
-                    savedPropertyIds={state.savedPropertyIds}
-                    language={language}
-                    onSelectProperty={setSelectedTenantProperty}
-                    onToggleSave={handleToggleSave}
-                  />
-                </div>
-              )}
-
-              {currentTab === 'complaints' && (
-                <TenantMyStayView
-                  tenantProfile={state.tenantProfile}
-                  property={activeProperty}
-                  rentRecords={state.rentRecords}
-                  complaints={state.complaints}
-                  language={language}
-                  onViewReceipt={setSelectedReceiptRecord}
-                  onSubmitComplaint={handleAddComplaint}
-                />
-              )}
-            </>
+          {currentTab === 'settings' && (
+            <SettingsView
+              profile={state.profile}
+              language={language}
+              onUpdateProfile={handleUpdateProfile}
+            />
           )}
 
         </main>
@@ -1004,14 +867,10 @@ export function App() {
 
       {showAuthModal && (
         <AuthModal
-          currentRole={state.currentRole}
-          onSelectRole={handleSelectRole}
           profile={state.profile}
-          tenantProfile={state.tenantProfile}
           isOpen={showAuthModal}
           onClose={() => setShowAuthModal(false)}
           onUpdateProfile={handleUpdateProfile}
-          onUpdateTenantProfile={handleUpdateTenantProfile}
           isAuthenticated={isAuthenticated}
           onLogout={handleLogout}
           userEmail={userEmail}
@@ -1024,16 +883,6 @@ export function App() {
           property={activeProperty}
           profile={state.profile}
           onClose={() => setSelectedReceiptRecord(null)}
-        />
-      )}
-
-      {selectedTenantProperty && (
-        <TenantRoomDetailModal
-          property={selectedTenantProperty}
-          rooms={state.rooms}
-          beds={state.beds}
-          onClose={() => setSelectedTenantProperty(null)}
-          onSubmitInquiry={handleAddNewLead}
         />
       )}
 
