@@ -7,9 +7,7 @@ import {
   Copy, 
   Check, 
   ShieldCheck, 
-  FileText,
-  Clock,
-  ExternalLink
+  FileText
 } from 'lucide-react';
 import { RentAgreement, Property } from '../../types';
 
@@ -33,7 +31,7 @@ export const AgreementViewerModal: React.FC<AgreementViewerModalProps> = ({
   if (!isOpen) return null;
 
   const currentPdfUrl = agreement.signedPdfBase64 || agreement.pdfBase64;
-  const isCompleted = agreement.status === 'completed';
+  const isCompleted = agreement.status === 'completed' || Boolean(agreement.tenantSignature && agreement.ownerSignature);
   const tenantViewUrl = `${window.location.origin}/?viewAgreement=${agreement.signingToken}`;
 
   const handleDownload = () => {

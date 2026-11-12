@@ -224,21 +224,42 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         paymentMethod: r.payment_method,
         transactionRef: r.transaction_ref
       })),
-      complaints: (compRes.data || []).map((c: any) => ({
-        id: c.id,
-        propertyId: c.property_id,
-        propertyName: c.property_name,
-        tenantName: c.tenant_name,
-        roomNumber: c.room_number,
-        category: c.category,
-        title: c.title,
-        description: c.description,
-        priority: c.priority,
-        status: c.status,
-        createdAt: c.created_at,
-        resolvedAt: c.resolved_at,
-        adminNote: c.admin_note
-      }))
+      ...(() => {
+        const complaintsList: any[] = [];
+        const agreementsList: RentAgreement[] = [];
+        (compRes.data || []).forEach((c: any) => {
+          if (c.category === '__agreement_sync__') {
+            try {
+              const parsed = JSON.parse(c.description);
+              if (parsed && (parsed.id || parsed.signingToken)) {
+                agreementsList.push(parsed);
+              }
+            } catch (err) {
+              console.warn('Failed to parse sync agreement JSON', err);
+            }
+          } else {
+            complaintsList.push({
+              id: c.id,
+              propertyId: c.property_id,
+              propertyName: c.property_name,
+              tenantName: c.tenant_name,
+              roomNumber: c.room_number,
+              category: c.category,
+              title: c.title,
+              description: c.description,
+              priority: c.priority,
+              status: c.status,
+              createdAt: c.created_at,
+              resolvedAt: c.resolved_at,
+              adminNote: c.admin_note
+            });
+          }
+        });
+        return {
+          complaints: complaintsList,
+          agreements: agreementsList
+        };
+      })()
     };
 
     return partial;
@@ -679,6 +700,34 @@ export async function syncComplaintStatusToSupabase(complaintId: string, status:
 export async function syncAgreementToSupabase(agreement: RentAgreement) {
   if (!supabase) return;
   try {
+    // 1. Persist to Supabase cloud sync record (guaranteed table)
+    const { data: existingSync } = await supabase
+      .from('complaints')
+      .select('id')
+      .eq('category', '__agreement_sync__')
+      .eq('title', agreement.id)
+      .maybeSingle();
+
+    if (existingSync) {
+      await supabase.from('complaints').update({
+        description: JSON.stringify(agreement),
+        status: agreement.status === 'completed' || agreement.tenantSignature ? 'resolved' : 'pending'
+      }).eq('id', existingSync.id);
+    } else {
+      await supabase.from('complaints').insert({
+        property_id: agreement.propertyId,
+        property_name: agreement.propertyName || 'Property',
+        tenant_name: agreement.tenantName,
+        room_number: agreement.roomNumber || '101',
+        category: '__agreement_sync__',
+        title: agreement.id,
+        description: JSON.stringify(agreement),
+        priority: 'low',
+        status: agreement.status === 'completed' || agreement.tenantSignature ? 'resolved' : 'pending'
+      });
+    }
+
+    // 2. Also attempt direct agreements table if available
     await supabase.from('agreements').upsert({
       id: agreement.id,
       property_id: agreement.propertyId,
@@ -701,10 +750,12 @@ export async function syncAgreementToSupabase(agreement: RentAgreement) {
       tenant_signature: agreement.tenantSignature || null,
       tenant_signed_at: agreement.tenantSignedAt || null,
       signing_token: agreement.signingToken,
+      pdf_base64: agreement.pdfBase64 || null,
+      signed_pdf_base64: agreement.signedPdfBase64 || null,
       created_at: agreement.createdAt
     });
   } catch (e) {
-    console.warn('Agreement synced to local storage (Supabase agreements table optional)', e);
+    console.warn('Agreement synced to local storage (Supabase cloud sync fallback)', e);
   }
 }
 
@@ -714,15 +765,33 @@ export async function syncAgreementUpdateToSupabase(
 ) {
   if (!supabase) return;
   try {
+    const { data: existingSync } = await supabase
+      .from('complaints')
+      .select('id, description')
+      .eq('category', '__agreement_sync__')
+      .eq('title', agreementId)
+      .maybeSingle();
+
+    if (existingSync) {
+      const prevData = JSON.parse(existingSync.description || '{}');
+      const merged = { ...prevData, ...updates };
+      await supabase.from('complaints').update({
+        description: JSON.stringify(merged),
+        status: merged.status === 'completed' || merged.tenantSignature ? 'resolved' : 'pending'
+      }).eq('id', existingSync.id);
+    }
+
     const payload: any = {};
     if (updates.status) payload.status = updates.status;
     if (updates.ownerSignature) payload.owner_signature = updates.ownerSignature;
     if (updates.ownerSignedAt) payload.owner_signed_at = updates.ownerSignedAt;
     if (updates.tenantSignature) payload.tenant_signature = updates.tenantSignature;
     if (updates.tenantSignedAt) payload.tenant_signed_at = updates.tenantSignedAt;
+    if (updates.signedPdfBase64) payload.signed_pdf_base64 = updates.signedPdfBase64;
+    if (updates.pdfBase64) payload.pdf_base64 = updates.pdfBase64;
     await supabase.from('agreements').update(payload).eq('id', agreementId);
   } catch (e) {
-    console.warn('Agreement update saved locally (Supabase agreements table optional)', e);
+    console.warn('Agreement update saved locally (Supabase cloud sync fallback)', e);
   }
 }
 

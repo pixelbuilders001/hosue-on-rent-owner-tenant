@@ -72,27 +72,133 @@ export function App() {
     return null;
   });
 
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
   // Sync to localStorage on every state change
   useEffect(() => {
     saveState(state);
   }, [state]);
 
-  // Fetch live Supabase data on mount & bind auth state
+  // Fetch live Supabase data on mount & bind auth state & cross-tab sync
   useEffect(() => {
-    fetchLiveSupabaseData().then(liveData => {
-      if (liveData) {
-        setState(prev => ({
-          ...prev,
-          properties: liveData.properties || [],
-          rooms: liveData.rooms || [],
-          beds: liveData.beds || [],
-          leads: liveData.leads || [],
-          tenants: liveData.tenants || [],
-          rentRecords: liveData.rentRecords || [],
-          complaints: liveData.complaints || []
-        }));
+    fetchLiveSupabaseData()
+      .then(liveData => {
+        if (liveData) {
+          setState(prev => {
+            const mergedAgreements = [...prev.agreements];
+            (liveData.agreements || []).forEach(liveAg => {
+              const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
+              if (idx >= 0) {
+                if (liveAg.tenantSignature || liveAg.status === 'completed') {
+                  mergedAgreements[idx] = liveAg;
+                }
+              } else {
+                mergedAgreements.push(liveAg);
+              }
+            });
+
+            const enrichedTenants: Tenant[] = (liveData.tenants || []).map(t => {
+              const ag = mergedAgreements.find(a => a.tenantId === t.id);
+              if (ag) {
+                return {
+                  ...t,
+                  agreementId: ag.id,
+                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
+                };
+              }
+              return t;
+            });
+
+            return {
+              ...prev,
+              properties: liveData.properties || [],
+              rooms: liveData.rooms || [],
+              beds: liveData.beds || [],
+              leads: liveData.leads || [],
+              tenants: enrichedTenants,
+              rentRecords: liveData.rentRecords || [],
+              complaints: liveData.complaints || [],
+              agreements: mergedAgreements
+            };
+          });
+        }
+      })
+      .finally(() => {
+        setIsInitialLoading(false);
+      });
+
+    // Cross-tab and window focus sync so owner tab updates immediately when tenant signs in another tab
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'roomsaathi_owner_state_v1' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.agreements) {
+            setState(prev => {
+              const merged = [...parsed.agreements];
+              const updatedTenants: Tenant[] = prev.tenants.map(t => {
+                const matchedAg = merged.find((a: any) => a.tenantId === t.id);
+                if (matchedAg) {
+                  return {
+                    ...t,
+                    agreementId: matchedAg.id,
+                    agreementStatus: ((matchedAg.status === 'completed' || matchedAg.tenantSignature) ? 'completed' : matchedAg.status) as Tenant['agreementStatus']
+                  };
+                }
+                return t;
+              });
+              return {
+                ...prev,
+                agreements: merged,
+                tenants: updatedTenants
+              };
+            });
+          }
+        } catch (err) {
+          console.warn('Cross-tab storage sync error', err);
+        }
       }
-    });
+    };
+
+    const handleWindowFocus = () => {
+      fetchLiveSupabaseData().then(liveData => {
+        if (liveData && liveData.agreements && liveData.agreements.length > 0) {
+          setState(prev => {
+            const mergedAgreements = [...prev.agreements];
+            liveData.agreements!.forEach(liveAg => {
+              const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
+              if (idx >= 0) {
+                if (liveAg.tenantSignature || liveAg.status === 'completed') {
+                  mergedAgreements[idx] = liveAg;
+                }
+              } else {
+                mergedAgreements.push(liveAg);
+              }
+            });
+
+            const enrichedTenants: Tenant[] = prev.tenants.map(t => {
+              const ag = mergedAgreements.find(a => a.tenantId === t.id);
+              if (ag) {
+                return {
+                  ...t,
+                  agreementId: ag.id,
+                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
+                };
+              }
+              return t;
+            });
+
+            return {
+              ...prev,
+              agreements: mergedAgreements,
+              tenants: enrichedTenants
+            };
+          });
+        }
+      });
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleWindowFocus);
 
     const client = supabase;
     if (client) {
@@ -712,7 +818,7 @@ export function App() {
 
   // If tenant accessed via public digital signing link: ?signAgreement=<token>
   if (signingTokenParam) {
-    const agreement = state.agreements.find(a => a.signingToken === signingTokenParam);
+    const agreement = state.agreements.find(a => a.signingToken === signingTokenParam || a.id === signingTokenParam);
     if (agreement) {
       return (
         <TenantSignAgreementView
@@ -723,6 +829,16 @@ export function App() {
             window.history.replaceState({}, '', window.location.pathname);
           }}
         />
+      );
+    } else if (isInitialLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full border border-slate-200 shadow-xl text-center space-y-3">
+            <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <h3 className="text-sm font-bold text-slate-800">Loading Rent Agreement...</h3>
+            <p className="text-xs text-slate-400">Verifying lease document and digital signatures...</p>
+          </div>
+        </div>
       );
     } else {
       return (

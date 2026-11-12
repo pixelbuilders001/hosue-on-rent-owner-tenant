@@ -74,9 +74,11 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentPdfUrl = agreement.signedPdfBase64 || agreement.pdfBase64;
-  const isCompleted = agreement.status === 'completed';
-  const isPendingTenant = agreement.status === 'pending_tenant';
+  const currentPdfUrl = agreement.signedPdfBase64 || agreement.pdfBase64 || existingAgreement?.signedPdfBase64 || existingAgreement?.pdfBase64;
+  const hasTenantSignature = Boolean(agreement.tenantSignature || existingAgreement?.tenantSignature);
+  const hasOwnerSignature = Boolean(agreement.ownerSignature || existingAgreement?.ownerSignature);
+  const isCompleted = agreement.status === 'completed' || existingAgreement?.status === 'completed' || (hasTenantSignature && hasOwnerSignature);
+  const isPendingTenant = !isCompleted && ((agreement.status === 'pending_tenant' || existingAgreement?.status === 'pending_tenant' || hasOwnerSignature) && !hasTenantSignature);
 
   // Generate Standard 11-Month Lease
   const handleGenerateStandardLease = async () => {
@@ -428,7 +430,7 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                   <div className="flex items-center gap-3">
                     {/* Landlord sign status */}
                     <div className="flex items-center gap-1.5 text-xs font-semibold">
-                      {agreement.ownerSignature ? (
+                      {hasOwnerSignature ? (
                         <span className="text-emerald-700 flex items-center gap-1">
                           <Check size={14} className="stroke-[3]" /> Owner Signed
                         </span>
@@ -443,7 +445,7 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
 
                     {/* Tenant sign status */}
                     <div className="flex items-center gap-1.5 text-xs font-semibold">
-                      {agreement.tenantSignature ? (
+                      {hasTenantSignature ? (
                         <span className="text-emerald-700 flex items-center gap-1">
                           <Check size={14} className="stroke-[3]" /> Tenant Signed
                         </span>
@@ -459,7 +461,7 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     
                     {/* Sign as Landlord */}
-                    {!agreement.ownerSignature && (
+                    {!hasOwnerSignature && (
                       <button
                         onClick={() => setShowSignPad(true)}
                         className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition"
@@ -469,7 +471,7 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                     )}
 
                     {/* WhatsApp share */}
-                    {agreement.ownerSignature && !isCompleted && (
+                    {hasOwnerSignature && !isCompleted && (
                       <button
                         onClick={handleShareWhatsApp}
                         className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition"

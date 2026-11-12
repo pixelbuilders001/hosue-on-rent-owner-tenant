@@ -7,7 +7,6 @@ import {
   LogOut, 
   Search, 
   X, 
-  FileText,
   Eye,
   Settings
 } from 'lucide-react';
@@ -222,8 +221,10 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                     {(() => {
                       const ag = agreements.find(a => a.tenantId === tenant.id);
                       const hasPdf = ag && (ag.signedPdfBase64 || ag.pdfBase64);
-                      const isCompleted = ag?.status === 'completed';
-                      const isPendingTenant = ag?.status === 'pending_tenant';
+                      const hasTenantSig = Boolean(ag?.tenantSignature);
+                      const hasOwnerSig = Boolean(ag?.ownerSignature);
+                      const isCompleted = ag?.status === 'completed' || tenant.agreementStatus === 'completed' || (hasTenantSig && hasOwnerSig);
+                      const isPendingTenant = !isCompleted && (ag?.status === 'pending_tenant' || tenant.agreementStatus === 'pending_tenant' || hasOwnerSig) && !hasTenantSig;
 
                       if (hasPdf) {
                         return (
@@ -239,7 +240,7 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                               title="Click to view and read agreement PDF"
                             >
                               <Eye size={11} className={isCompleted ? 'text-emerald-700' : 'text-amber-700'} />
-                              <span>{isCompleted ? '✓ View Signed Lease' : 'View (Sign Pending)'}</span>
+                              <span>{isCompleted ? '✓ View Signed Lease' : isPendingTenant ? 'Awaiting Tenant Sign' : 'View (Sign Pending)'}</span>
                             </button>
 
                             <button
@@ -540,6 +541,7 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
       {/* Rent Agreement Management Modal */}
       {selectedAgreementTenant && (
         <RentAgreementModal
+          key={`${selectedAgreementTenant.id}-${agreements.find(a => a.tenantId === selectedAgreementTenant.id)?.tenantSignature ? 'signed' : 'pending'}-${agreements.find(a => a.tenantId === selectedAgreementTenant.id)?.status || 'draft'}`}
           isOpen={Boolean(selectedAgreementTenant)}
           tenant={selectedAgreementTenant}
           property={property}

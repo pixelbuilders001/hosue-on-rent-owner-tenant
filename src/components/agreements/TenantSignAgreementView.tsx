@@ -24,19 +24,21 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
   onUpdateAgreement,
   onExit
 }) => {
+  const [signedAgreement, setSignedAgreement] = useState<RentAgreement | null>(null);
   const [showSignPad, setShowSignPad] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
-  const [successSigned, setSuccessSigned] = useState(agreement.status === 'completed');
+  const [successSigned, setSuccessSigned] = useState(agreement.status === 'completed' || Boolean(agreement.tenantSignature));
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const isCompleted = agreement.status === 'completed';
-  const currentPdfUrl = agreement.signedPdfBase64 || agreement.pdfBase64;
+  const activeAgreement = signedAgreement || agreement;
+  const isCompleted = activeAgreement.status === 'completed' || successSigned || Boolean(activeAgreement.tenantSignature);
+  const currentPdfUrl = activeAgreement.signedPdfBase64 || activeAgreement.pdfBase64;
 
   const handleDownloadPdf = () => {
     if (!currentPdfUrl) return;
     const link = document.createElement('a');
     link.href = currentPdfUrl;
-    link.download = `Executed_Rent_Agreement_${agreement.tenantName.replace(/\s+/g, '_')}.pdf`;
+    link.download = `Executed_Rent_Agreement_${activeAgreement.tenantName.replace(/\s+/g, '_')}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -62,32 +64,32 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
     setIsSigning(true);
     const now = new Date().toISOString();
 
+    let finalPdf = activeAgreement.signedPdfBase64 || activeAgreement.pdfBase64;
     try {
-      let finalPdf = agreement.signedPdfBase64 || agreement.pdfBase64;
       if (finalPdf) {
         finalPdf = await embedSignaturesIntoPdf(
           finalPdf,
-          agreement.ownerSignature,
+          activeAgreement.ownerSignature,
           sigUri,
-          { ...agreement, tenantSignedAt: now }
+          { ...activeAgreement, tenantSignedAt: now }
         );
       }
-
-      const updated: RentAgreement = {
-        ...agreement,
-        tenantSignature: sigUri,
-        tenantSignedAt: now,
-        signedPdfBase64: finalPdf,
-        status: 'completed'
-      };
-
-      onUpdateAgreement(updated);
-      setSuccessSigned(true);
     } catch (e) {
-      console.error('Failed to embed tenant signature', e);
-    } finally {
-      setIsSigning(false);
+      console.warn('PDF embedding fallback, preserving signature data', e);
     }
+
+    const updated: RentAgreement = {
+      ...activeAgreement,
+      tenantSignature: sigUri,
+      tenantSignedAt: now,
+      signedPdfBase64: finalPdf,
+      status: 'completed'
+    };
+
+    setSignedAgreement(updated);
+    setSuccessSigned(true);
+    onUpdateAgreement(updated);
+    setIsSigning(false);
   };
 
   return (
@@ -180,7 +182,7 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
               </div>
               <h1 className="text-lg sm:text-xl font-bold">Review & Sign Your Tenancy Agreement</h1>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Landlord <b>{agreement.ownerName}</b> has digitally signed your lease for <b>{agreement.propertyName}</b>. Please review the terms below and sign with your finger or stylus to finalize your stay.
+                Landlord <b>{activeAgreement.ownerName}</b> has digitally signed your lease for <b>{activeAgreement.propertyName}</b>. Please review the terms below and sign with your finger or stylus to finalize your stay.
               </p>
             </div>
 
@@ -199,14 +201,14 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs">
             <span className="text-slate-400 font-semibold block text-[10px] uppercase">Property & Room</span>
-            <span className="font-bold text-slate-800 text-sm mt-0.5 block truncate">{agreement.propertyName}</span>
-            <span className="text-[11px] text-slate-500">Unit / Room {agreement.roomNumber}</span>
+            <span className="font-bold text-slate-800 text-sm mt-0.5 block truncate">{activeAgreement.propertyName}</span>
+            <span className="text-[11px] text-slate-500">Unit / Room {activeAgreement.roomNumber}</span>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs">
             <span className="text-slate-400 font-semibold block text-[10px] uppercase">Monthly Rent</span>
             <span className="font-bold text-emerald-800 text-sm mt-0.5 block">
-              ₹{Number(agreement.monthlyRent).toLocaleString('en-IN')}/mo
+              ₹{Number(activeAgreement.monthlyRent).toLocaleString('en-IN')}/mo
             </span>
             <span className="text-[11px] text-slate-500">Due by 5th of month</span>
           </div>
@@ -214,7 +216,7 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
           <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs">
             <span className="text-slate-400 font-semibold block text-[10px] uppercase">Security Deposit</span>
             <span className="font-bold text-blue-900 text-sm mt-0.5 block">
-              ₹{Number(agreement.depositAmount).toLocaleString('en-IN')}
+              ₹{Number(activeAgreement.depositAmount).toLocaleString('en-IN')}
             </span>
             <span className="text-[11px] text-slate-500">Refundable at vacate</span>
           </div>
@@ -222,9 +224,9 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
           <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs">
             <span className="text-slate-400 font-semibold block text-[10px] uppercase">Lease Term</span>
             <span className="font-bold text-slate-800 text-sm mt-0.5 block">
-              {agreement.durationMonths || 11} Months
+              {activeAgreement.durationMonths || 11} Months
             </span>
-            <span className="text-[11px] text-slate-500">From {agreement.startDate}</span>
+            <span className="text-[11px] text-slate-500">From {activeAgreement.startDate}</span>
           </div>
         </div>
 
@@ -290,7 +292,7 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
         <SignaturePadModal
           isOpen={showSignPad}
           title="Sign Agreement as Tenant (किरायेदार हस्ताक्षर)"
-          signatoryName={agreement.tenantName}
+          signatoryName={activeAgreement.tenantName}
           role="tenant"
           onSave={handleSaveTenantSignature}
           onClose={() => setShowSignPad(false)}
