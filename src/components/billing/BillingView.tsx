@@ -1,21 +1,18 @@
 import React, { useState } from 'react';
 import { 
   Zap, 
-  IndianRupee, 
   Share2, 
   CheckCircle2, 
   Clock, 
   AlertCircle, 
-  Plus, 
   Receipt, 
   FileText, 
   Copy, 
   Check, 
-  Calendar,
   Send
 } from 'lucide-react';
-import { Property, RentRecord, Tenant, Room, OwnerProfile, Language } from '../../types';
-import { t } from '../../services/i18n';
+import { Property, RentRecord, Tenant, Room, OwnerProfile, Language, RentAgreement } from '../../types';
+import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
 
 interface BillingViewProps {
   property: Property;
@@ -24,9 +21,11 @@ interface BillingViewProps {
   tenants: Tenant[];
   rooms: Room[];
   language: Language;
+  agreements?: RentAgreement[];
   onRecordRentPayment: (record: Omit<RentRecord, 'id'>) => void;
   onUpdatePaymentStatus: (recordId: string, status: RentRecord['status'], method?: RentRecord['paymentMethod'], ref?: string) => void;
   onViewReceipt: (record: RentRecord) => void;
+  onViewAgreement?: (agreement: RentAgreement) => void;
 }
 
 export const BillingView: React.FC<BillingViewProps> = ({
@@ -35,12 +34,15 @@ export const BillingView: React.FC<BillingViewProps> = ({
   rentRecords,
   tenants,
   rooms,
-  language,
+  language: _language,
+  agreements = [],
   onRecordRentPayment,
   onUpdatePaymentStatus,
-  onViewReceipt
+  onViewReceipt,
+  onViewAgreement
 }) => {
   const [activeTab, setActiveTab] = useState<'khata' | 'meter_calc'>('khata');
+  const [viewingAgreement, setViewingAgreement] = useState<RentAgreement | null>(null);
   const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const allAvailableMonths = Array.from(new Set([
     currentMonthName,
@@ -69,12 +71,6 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const [payTarget, setPayTarget] = useState<RentRecord | null>(null);
   const [payMethod, setPayMethod] = useState<RentRecord['paymentMethod']>('UPI');
   const [transactionRef, setTransactionRef] = useState('');
-
-  // New Bill Entry Modal
-  const [showNewBillModal, setShowNewBillModal] = useState(false);
-  const [newBillTenantId, setNewBillTenantId] = useState('');
-  const [newBillUnits, setNewBillUnits] = useState(0);
-  const [newBillAmount, setNewBillAmount] = useState(4000);
 
   // 1. All active tenants in this property
   const propTenants = tenants.filter(t => t.propertyId === property.id && t.status !== 'vacated');
@@ -479,6 +475,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
                     unifiedEntries.map(entry => {
                       const record = entry.record;
                       const tenant = entry.tenant;
+                      const tenantAgreement = agreements.find(a => a.tenantId === tenant.id);
                       const isPaid = record?.status === 'paid';
                       const isOverdue = record?.status === 'overdue';
                       const isPending = record?.status === 'pending';
@@ -535,6 +532,23 @@ export const BillingView: React.FC<BillingViewProps> = ({
                           </td>
 
                           <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                            {tenantAgreement && (
+                              <button
+                                onClick={() => {
+                                  if (onViewAgreement) {
+                                    onViewAgreement(tenantAgreement);
+                                  } else {
+                                    setViewingAgreement(tenantAgreement);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition inline-flex items-center gap-1 align-middle"
+                                title={tenantAgreement.status === 'completed' ? 'View Signed Rent Agreement' : 'View Agreement (Pending / Draft)'}
+                              >
+                                <FileText size={12} />
+                                <span className="hidden sm:inline">Lease</span>
+                              </button>
+                            )}
+
                             {isPaid && record ? (
                               <button
                                 onClick={() => onViewReceipt(record)}
@@ -675,6 +689,16 @@ export const BillingView: React.FC<BillingViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Agreement Viewer Modal */}
+      {viewingAgreement && (
+        <AgreementViewerModal
+          isOpen={Boolean(viewingAgreement)}
+          agreement={viewingAgreement}
+          property={property}
+          onClose={() => setViewingAgreement(null)}
+        />
       )}
 
     </div>

@@ -11,6 +11,7 @@ import { SettingsView } from './components/settings/SettingsView';
 import { AddPropertyModal } from './components/common/AddPropertyModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { ReceiptModal } from './components/billing/ReceiptModal';
+import { TenantSignAgreementView } from './components/agreements/TenantSignAgreementView';
 
 import { Building2, Plus, Lock } from 'lucide-react';
 import { 
@@ -31,6 +32,7 @@ import {
   syncPropertyStatusToSupabase,
   syncRoomStatusToSupabase,
   syncUpdatePropertyToSupabase,
+  syncAgreementToSupabase,
   generateUUID
 } from './services/store';
 import { supabase } from './services/supabase';
@@ -43,7 +45,8 @@ import {
   RentRecord, 
   Complaint, 
   OwnerProfile, 
-  Language 
+  Language,
+  RentAgreement
 } from './types';
 
 export function App() {
@@ -61,6 +64,13 @@ export function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedReceiptRecord, setSelectedReceiptRecord] = useState<RentRecord | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [signingTokenParam, setSigningTokenParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('signAgreement') || params.get('viewAgreement') || params.get('agreement');
+    }
+    return null;
+  });
 
   // Sync to localStorage on every state change
   useEffect(() => {
@@ -677,6 +687,69 @@ export function App() {
     setState(prev => ({ ...prev, profile }));
   };
 
+  // Rent Agreement save/update handler
+  const handleSaveAgreement = (agreement: RentAgreement) => {
+    syncAgreementToSupabase(agreement);
+    setState(prev => {
+      const existingIdx = prev.agreements.findIndex(a => a.id === agreement.id);
+      const nextAgreements = existingIdx >= 0
+        ? prev.agreements.map((a, i) => i === existingIdx ? agreement : a)
+        : [agreement, ...prev.agreements];
+
+      const nextTenants = prev.tenants.map(t =>
+        t.id === agreement.tenantId
+          ? { ...t, agreementId: agreement.id, agreementStatus: agreement.status }
+          : t
+      );
+
+      return {
+        ...prev,
+        agreements: nextAgreements,
+        tenants: nextTenants
+      };
+    });
+  };
+
+  // If tenant accessed via public digital signing link: ?signAgreement=<token>
+  if (signingTokenParam) {
+    const agreement = state.agreements.find(a => a.signingToken === signingTokenParam);
+    if (agreement) {
+      return (
+        <TenantSignAgreementView
+          agreement={agreement}
+          onUpdateAgreement={handleSaveAgreement}
+          onExit={() => {
+            setSigningTokenParam(null);
+            window.history.replaceState({}, '', window.location.pathname);
+          }}
+        />
+      );
+    } else {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full border border-slate-200 shadow-xl text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl font-bold">
+              !
+            </div>
+            <h2 className="text-lg font-bold text-slate-800">Agreement Not Found</h2>
+            <p className="text-xs text-slate-500">
+              This digital signing link may have expired or is invalid. Please request the property owner to resend the signing link.
+            </p>
+            <button
+              onClick={() => {
+                setSigningTokenParam(null);
+                window.history.replaceState({}, '', window.location.pathname);
+              }}
+              className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              Go to RoomSaathi Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-16 lg:pb-0 overflow-x-hidden w-full">
       
@@ -796,8 +869,12 @@ export function App() {
                   rooms={state.rooms}
                   beds={state.beds}
                   language={language}
+                  agreements={state.agreements}
+                  ownerName={state.profile.fullName}
+                  ownerPhone={state.profile.phone}
                   onAddTenant={handleAddTenant}
                   onVacateTenant={handleVacateTenant}
+                  onSaveAgreement={handleSaveAgreement}
                 />
               )}
 
@@ -809,6 +886,7 @@ export function App() {
                   tenants={state.tenants}
                   rooms={state.rooms}
                   language={language}
+                  agreements={state.agreements}
                   onRecordRentPayment={handleRecordRentPayment}
                   onUpdatePaymentStatus={handleUpdatePaymentStatus}
                   onViewReceipt={setSelectedReceiptRecord}

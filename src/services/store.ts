@@ -1,4 +1,4 @@
-import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint } from '../types';
+import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, RentAgreement } from '../types';
 
 const STORAGE_KEY = 'roomsaathi_clean_v2';
 
@@ -11,6 +11,7 @@ export interface AppState {
   leads: Lead[];
   rentRecords: RentRecord[];
   complaints: Complaint[];
+  agreements: RentAgreement[];
   activePropertyId: string;
 }
 
@@ -37,6 +38,7 @@ export function getInitialState(): AppState {
     leads: [],
     rentRecords: [],
     complaints: [],
+    agreements: [],
     activePropertyId: ''
   };
 
@@ -673,4 +675,55 @@ export async function syncComplaintStatusToSupabase(complaintId: string, status:
     console.error('Failed to update complaint in Supabase', e);
   }
 }
+
+export async function syncAgreementToSupabase(agreement: RentAgreement) {
+  if (!supabase) return;
+  try {
+    await supabase.from('agreements').upsert({
+      id: agreement.id,
+      property_id: agreement.propertyId,
+      property_name: agreement.propertyName,
+      tenant_id: agreement.tenantId,
+      tenant_name: agreement.tenantName,
+      tenant_phone: agreement.tenantPhone,
+      tenant_aadhaar: agreement.tenantAadhaar || null,
+      owner_name: agreement.ownerName,
+      owner_phone: agreement.ownerPhone,
+      room_number: agreement.roomNumber,
+      monthly_rent: Number(agreement.monthlyRent) || 0,
+      deposit_amount: Number(agreement.depositAmount) || 0,
+      start_date: agreement.startDate,
+      duration_months: Number(agreement.durationMonths) || 11,
+      pdf_file_name: agreement.pdfFileName || 'rent_agreement.pdf',
+      status: agreement.status,
+      owner_signature: agreement.ownerSignature || null,
+      owner_signed_at: agreement.ownerSignedAt || null,
+      tenant_signature: agreement.tenantSignature || null,
+      tenant_signed_at: agreement.tenantSignedAt || null,
+      signing_token: agreement.signingToken,
+      created_at: agreement.createdAt
+    });
+  } catch (e) {
+    console.warn('Agreement synced to local storage (Supabase agreements table optional)', e);
+  }
+}
+
+export async function syncAgreementUpdateToSupabase(
+  agreementId: string,
+  updates: Partial<RentAgreement>
+) {
+  if (!supabase) return;
+  try {
+    const payload: any = {};
+    if (updates.status) payload.status = updates.status;
+    if (updates.ownerSignature) payload.owner_signature = updates.ownerSignature;
+    if (updates.ownerSignedAt) payload.owner_signed_at = updates.ownerSignedAt;
+    if (updates.tenantSignature) payload.tenant_signature = updates.tenantSignature;
+    if (updates.tenantSignedAt) payload.tenant_signed_at = updates.tenantSignedAt;
+    await supabase.from('agreements').update(payload).eq('id', agreementId);
+  } catch (e) {
+    console.warn('Agreement update saved locally (Supabase agreements table optional)', e);
+  }
+}
+
 

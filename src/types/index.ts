@@ -120,6 +120,8 @@ export interface Tenant {
   policeVerificationStatus: 'pending' | 'submitted' | 'verified';
   tenantCategory?: 'family' | 'bachelor_individual' | 'student';
   familyMembersCount?: number;
+  agreementId?: string;
+  agreementStatus?: 'draft' | 'pending_owner' | 'pending_tenant' | 'completed';
 }
 
 export interface Lead {
@@ -176,4 +178,31 @@ export interface Complaint {
   createdAt: string;
   resolvedAt?: string;
   adminNote?: string;
+}
+
+export interface RentAgreement {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  tenantId: string;
+  tenantName: string;
+  tenantPhone: string;
+  tenantAadhaar?: string;
+  ownerName: string;
+  ownerPhone: string;
+  roomNumber: string;
+  monthlyRent: number;
+  depositAmount: number;
+  startDate: string;
+  durationMonths: number;
+  pdfBase64?: string; // Original uploaded or generated PDF as data URI
+  pdfFileName?: string;
+  status: 'draft' | 'pending_owner' | 'pending_tenant' | 'completed';
+  ownerSignature?: string; // PNG Data URI
+  ownerSignedAt?: string;
+  tenantSignature?: string; // PNG Data URI
+  tenantSignedAt?: string;
+  signedPdfBase64?: string; // Executed final PDF with signatures embedded
+  signingToken: string;
+  createdAt: string;
 }

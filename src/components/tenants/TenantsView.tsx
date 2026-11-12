@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { 
-  Users, 
   Phone, 
   Share2, 
   Plus, 
   ShieldCheck, 
   LogOut, 
-  Calendar, 
-  Building2, 
   Search, 
   X, 
   FileText,
-  AlertCircle
+  Eye,
+  Settings
 } from 'lucide-react';
-import { Property, Tenant, Room, Bed, Language } from '../../types';
-import { t } from '../../services/i18n';
+import { Property, Tenant, Room, Bed, Language, RentAgreement } from '../../types';
+import { RentAgreementModal } from '../agreements/RentAgreementModal';
+import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
 
 interface TenantsViewProps {
   property: Property;
@@ -22,8 +21,12 @@ interface TenantsViewProps {
   rooms: Room[];
   beds: Bed[];
   language: Language;
+  agreements?: RentAgreement[];
+  ownerName?: string;
+  ownerPhone?: string;
   onAddTenant: (tenant: Omit<Tenant, 'id'>) => void;
   onVacateTenant: (tenantId: string, bedId?: string, refundAmount?: number) => void;
+  onSaveAgreement?: (agreement: RentAgreement) => void;
 }
 
 export const TenantsView: React.FC<TenantsViewProps> = ({
@@ -31,14 +34,19 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
   tenants,
   rooms,
   beds,
-  language,
+  language: _language,
+  agreements = [],
+  ownerName = '',
+  ownerPhone = '',
   onAddTenant,
-  onVacateTenant
+  onVacateTenant,
+  onSaveAgreement
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAgreementTenant, setSelectedAgreementTenant] = useState<Tenant | null>(null);
+  const [viewingAgreement, setViewingAgreement] = useState<RentAgreement | null>(null);
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [vacateTarget, setVacateTarget] = useState<Tenant | null>(null);
-  const [depositRefund, setDepositRefund] = useState(4000);
   const [deductions, setDeductions] = useState(0);
 
   // New Tenant Form
@@ -207,6 +215,57 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                     <span className="text-slate-400">Joined:</span>
                     <span>{tenant.checkInDate}</span>
                   </div>
+
+                  {/* Rent Agreement Status & Management */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-slate-400">Lease Agreement:</span>
+                    {(() => {
+                      const ag = agreements.find(a => a.tenantId === tenant.id);
+                      const hasPdf = ag && (ag.signedPdfBase64 || ag.pdfBase64);
+                      const isCompleted = ag?.status === 'completed';
+                      const isPendingTenant = ag?.status === 'pending_tenant';
+
+                      if (hasPdf) {
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setViewingAgreement(ag)}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                                isCompleted
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                              }`}
+                              title="Click to view and read agreement PDF"
+                            >
+                              <Eye size={11} className={isCompleted ? 'text-emerald-700' : 'text-amber-700'} />
+                              <span>{isCompleted ? '✓ View Signed Lease' : 'View (Sign Pending)'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAgreementTenant(tenant)}
+                              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                              title="Manage agreement & signing links"
+                            >
+                              <Settings size={12} />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAgreementTenant(tenant)}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus size={11} />
+                          <span>+ Create Lease</span>
+                        </button>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 
@@ -245,7 +304,6 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                 <button
                   onClick={() => {
                     setVacateTarget(tenant);
-                    setDepositRefund(tenant.depositPaid);
                     setDeductions(0);
                   }}
                   className="px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-lg transition flex items-center gap-1"
@@ -477,6 +535,41 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Rent Agreement Management Modal */}
+      {selectedAgreementTenant && (
+        <RentAgreementModal
+          isOpen={Boolean(selectedAgreementTenant)}
+          tenant={selectedAgreementTenant}
+          property={property}
+          existingAgreement={agreements.find(a => a.tenantId === selectedAgreementTenant.id)}
+          ownerName={ownerName}
+          ownerPhone={ownerPhone}
+          onSaveAgreement={ag => {
+            if (onSaveAgreement) {
+              onSaveAgreement(ag);
+            }
+          }}
+          onClose={() => setSelectedAgreementTenant(null)}
+        />
+      )}
+
+      {/* Standalone Agreement Viewer Modal */}
+      {viewingAgreement && (
+        <AgreementViewerModal
+          isOpen={Boolean(viewingAgreement)}
+          agreement={viewingAgreement}
+          property={property}
+          onClose={() => setViewingAgreement(null)}
+          onOpenEdit={() => {
+            const targetTenant = tenants.find(t => t.id === viewingAgreement.tenantId);
+            if (targetTenant) {
+              setViewingAgreement(null);
+              setSelectedAgreementTenant(targetTenant);
+            }
+          }}
+        />
       )}
 
     </div>
