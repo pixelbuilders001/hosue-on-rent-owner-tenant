@@ -475,7 +475,11 @@ export const BillingView: React.FC<BillingViewProps> = ({
                     unifiedEntries.map(entry => {
                       const record = entry.record;
                       const tenant = entry.tenant;
-                      const tenantAgreement = agreements.find(a => a.tenantId === tenant.id);
+                      const tenantAgreement = agreements.find(
+                        a => a.tenantId === tenant?.id ||
+                             (a.tenantPhone && a.tenantPhone === tenant?.phone) ||
+                             (a.tenantName && a.tenantName.toLowerCase() === tenant?.fullName?.toLowerCase())
+                      );
                       const isPaid = record?.status === 'paid';
                       const isOverdue = record?.status === 'overdue';
                       const isPending = record?.status === 'pending';

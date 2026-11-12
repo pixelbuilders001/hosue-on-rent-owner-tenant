@@ -12,6 +12,7 @@ import {
 import { RentAgreement } from '../../types';
 import { SignaturePadModal } from './SignaturePadModal';
 import { embedSignaturesIntoPdf } from '../../services/pdfAgreementService';
+import { syncAgreementToSupabase } from '../../services/store';
 
 interface TenantSignAgreementViewProps {
   agreement: RentAgreement;
@@ -88,6 +89,7 @@ export const TenantSignAgreementView: React.FC<TenantSignAgreementViewProps> = (
 
     setSignedAgreement(updated);
     setSuccessSigned(true);
+    syncAgreementToSupabase(updated);
     onUpdateAgreement(updated);
     setIsSigning(false);
   };

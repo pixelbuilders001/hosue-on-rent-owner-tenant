@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   FileText, 
@@ -11,12 +11,14 @@ import {
   AlertCircle, 
   Copy, 
   Check, 
-  Sparkles
+  Sparkles,
+  ExternalLink,
+  RotateCw
 } from 'lucide-react';
 import { Property, Tenant, RentAgreement } from '../../types';
 import { SignaturePadModal } from './SignaturePadModal';
 import { generateStandardAgreementPdf, embedSignaturesIntoPdf } from '../../services/pdfAgreementService';
-import { generateUUID } from '../../services/store';
+import { generateUUID, fetchLiveSupabaseData } from '../../services/store';
 
 interface RentAgreementModalProps {
   isOpen: boolean;
@@ -68,17 +70,55 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
     return existingAgreement?.signedPdfBase64 || existingAgreement?.pdfBase64 ? 'preview' : 'create';
   });
   const [showSignPad, setShowSignPad] = useState(false);
+  const [showTenantSignPad, setShowTenantSignPad] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
-  if (!isOpen) return null;
+  // Sync state if parent passes updated existingAgreement with tenant signature
+  useEffect(() => {
+    if (existingAgreement) {
+      if (existingAgreement.tenantSignature && !agreement.tenantSignature) {
+        setAgreement(existingAgreement);
+      }
+    }
+  }, [existingAgreement, agreement.tenantSignature]);
 
   const currentPdfUrl = agreement.signedPdfBase64 || agreement.pdfBase64 || existingAgreement?.signedPdfBase64 || existingAgreement?.pdfBase64;
   const hasTenantSignature = Boolean(agreement.tenantSignature || existingAgreement?.tenantSignature);
   const hasOwnerSignature = Boolean(agreement.ownerSignature || existingAgreement?.ownerSignature);
   const isCompleted = agreement.status === 'completed' || existingAgreement?.status === 'completed' || (hasTenantSignature && hasOwnerSignature);
   const isPendingTenant = !isCompleted && ((agreement.status === 'pending_tenant' || existingAgreement?.status === 'pending_tenant' || hasOwnerSignature) && !hasTenantSignature);
+
+  // Real-time polling every 3 seconds while awaiting tenant signature so landlord sees instant completion
+  useEffect(() => {
+    if (isCompleted || !isOpen) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const live = await fetchLiveSupabaseData();
+        if (live?.agreements && live.agreements.length > 0) {
+          const matched = live.agreements.find(
+            a => a.id === agreement.id ||
+                 a.signingToken === agreement.signingToken ||
+                 (a.tenantPhone && a.tenantPhone === tenant.phone) ||
+                 (a.tenantName && a.tenantName.toLowerCase() === tenant.fullName.toLowerCase())
+          );
+          if (matched && (matched.tenantSignature || matched.status === 'completed')) {
+            setAgreement(matched);
+            onSaveAgreement(matched);
+          }
+        }
+      } catch (e) {
+        // Silent poll catch
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [agreement.id, agreement.signingToken, isCompleted, isOpen, tenant.phone, tenant.fullName, onSaveAgreement]);
+
+  if (!isOpen) return null;
 
   // Generate Standard 11-Month Lease
   const handleGenerateStandardLease = async () => {
@@ -163,6 +203,62 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
 
     setAgreement(updated);
     onSaveAgreement(updated);
+  };
+
+  // Apply Tenant Signature (In-Person signing on owner device)
+  const handleSaveTenantSignature = async (sigUri: string) => {
+    setShowTenantSignPad(false);
+    const now = new Date().toISOString();
+
+    let updatedPdf = agreement.signedPdfBase64 || agreement.pdfBase64;
+    if (updatedPdf) {
+      try {
+        updatedPdf = await embedSignaturesIntoPdf(
+          updatedPdf,
+          agreement.ownerSignature,
+          sigUri,
+          { ...agreement, tenantSignedAt: now }
+        );
+      } catch (err) {
+        console.error('Failed to embed tenant signature into PDF', err);
+      }
+    }
+
+    const updated: RentAgreement = {
+      ...agreement,
+      tenantSignature: sigUri,
+      tenantSignedAt: now,
+      signedPdfBase64: updatedPdf,
+      status: 'completed'
+    };
+
+    setAgreement(updated);
+    onSaveAgreement(updated);
+    setActiveTab('preview');
+  };
+
+  // Manually refresh status from cloud
+  const handleRefreshStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      const live = await fetchLiveSupabaseData();
+      if (live?.agreements && live.agreements.length > 0) {
+        const matched = live.agreements.find(
+          a => a.id === agreement.id ||
+               a.signingToken === agreement.signingToken ||
+               (a.tenantPhone && a.tenantPhone === tenant.phone) ||
+               (a.tenantName && a.tenantName.toLowerCase() === tenant.fullName.toLowerCase())
+        );
+        if (matched && (matched.tenantSignature || matched.status === 'completed')) {
+          setAgreement(matched);
+          onSaveAgreement(matched);
+        }
+      }
+    } catch (e) {
+      console.warn('Refresh agreement error', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
   };
 
   // WhatsApp signing link
@@ -284,20 +380,53 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                     </button>
                   </div>
                 ) : isPendingTenant ? (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-amber-900">
                     <div className="flex items-center gap-2.5">
                       <Clock size={20} className="text-amber-600 shrink-0" />
                       <div>
-                        <div className="font-bold text-sm">Signed by Landlord · Awaiting Tenant Signature</div>
-                        <div>Share the digital signing link with {tenant.fullName} to complete execution.</div>
+                        <div className="font-bold text-sm flex items-center gap-2">
+                          <span>Signed by Landlord · Awaiting Tenant Signature</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Live Auto-Sync
+                          </span>
+                        </div>
+                        <div>Share signing link or sign in-person directly with {tenant.fullName}.</div>
                       </div>
                     </div>
-                    <button
-                      onClick={handleShareWhatsApp}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shrink-0 shadow-xs"
-                    >
-                      <Share2 size={14} /> Send Link on WhatsApp
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTenantSignPad(true)}
+                        className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                        title="Open digital signature pad for tenant right now"
+                      >
+                        <PenLine size={14} /> Sign as Tenant (In-Person)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => window.open(tenantSigningUrl, '_blank')}
+                        className="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-semibold flex items-center gap-1.5 shrink-0"
+                        title="Open tenant signing view in new tab"
+                      >
+                        <ExternalLink size={14} /> Open Signing Page
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleShareWhatsApp}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shrink-0 shadow-xs"
+                      >
+                        <Share2 size={14} /> WhatsApp Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRefreshStatus}
+                        className="p-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-semibold flex items-center shrink-0"
+                        title="Refresh status from cloud"
+                      >
+                        <RotateCw size={14} className={isRefreshing ? 'animate-spin text-emerald-600' : ''} />
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 
@@ -470,6 +599,30 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                       </button>
                     )}
 
+                    {/* In-Person Sign as Tenant */}
+                    {hasOwnerSignature && !hasTenantSignature && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTenantSignPad(true)}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                        title="Tenant signs directly on this device"
+                      >
+                        <PenLine size={13} /> Sign as Tenant (In-Person)
+                      </button>
+                    )}
+
+                    {/* Open Tenant Signing Page */}
+                    {hasOwnerSignature && !hasTenantSignature && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(tenantSigningUrl, '_blank')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition"
+                        title="Open tenant digital signing page in new tab"
+                      >
+                        <ExternalLink size={13} /> Open Signing Page
+                      </button>
+                    )}
+
                     {/* WhatsApp share */}
                     {hasOwnerSignature && !isCompleted && (
                       <button
@@ -477,6 +630,18 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                         className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
                       >
                         <Share2 size={14} /> WhatsApp Tenant
+                      </button>
+                    )}
+
+                    {/* Refresh status */}
+                    {!isCompleted && (
+                      <button
+                        type="button"
+                        onClick={handleRefreshStatus}
+                        className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl transition"
+                        title="Check if tenant signed"
+                      >
+                        <RotateCw size={13} className={isRefreshing ? 'animate-spin text-emerald-600' : ''} />
                       </button>
                     )}
 
@@ -553,6 +718,18 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
           role="owner"
           onSave={handleSaveOwnerSignature}
           onClose={() => setShowSignPad(false)}
+        />
+      )}
+
+      {/* Signature Pad Modal for Tenant (In-Person Signing) */}
+      {showTenantSignPad && (
+        <SignaturePadModal
+          isOpen={showTenantSignPad}
+          title={`Sign Agreement as Tenant (${tenant.fullName})`}
+          signatoryName={tenant.fullName}
+          role="tenant"
+          onSave={handleSaveTenantSignature}
+          onClose={() => setShowTenantSignPad(false)}
         />
       )}
     </>

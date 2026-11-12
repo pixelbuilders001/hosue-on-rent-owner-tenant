@@ -68,6 +68,14 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
     t.phone.includes(searchQuery)
   );
 
+  const findAgreementForTenant = (t: Tenant) => {
+    return agreements.find(
+      a => a.tenantId === t.id ||
+           (a.tenantPhone && a.tenantPhone === t.phone) ||
+           (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+    );
+  };
+
   const openWhatsApp = (phoneNum: string, text: string) => {
     const cleaned = phoneNum.replace(/[^0-9]/g, '');
     const url = `https://wa.me/${cleaned.startsWith('91') ? cleaned : '91' + cleaned}?text=${encodeURIComponent(text)}`;
@@ -219,7 +227,7 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-slate-400">Lease Agreement:</span>
                     {(() => {
-                      const ag = agreements.find(a => a.tenantId === tenant.id);
+                      const ag = findAgreementForTenant(tenant);
                       const hasPdf = ag && (ag.signedPdfBase64 || ag.pdfBase64);
                       const hasTenantSig = Boolean(ag?.tenantSignature);
                       const hasOwnerSig = Boolean(ag?.ownerSignature);
@@ -539,23 +547,26 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
       )}
 
       {/* Rent Agreement Management Modal */}
-      {selectedAgreementTenant && (
-        <RentAgreementModal
-          key={`${selectedAgreementTenant.id}-${agreements.find(a => a.tenantId === selectedAgreementTenant.id)?.tenantSignature ? 'signed' : 'pending'}-${agreements.find(a => a.tenantId === selectedAgreementTenant.id)?.status || 'draft'}`}
-          isOpen={Boolean(selectedAgreementTenant)}
-          tenant={selectedAgreementTenant}
-          property={property}
-          existingAgreement={agreements.find(a => a.tenantId === selectedAgreementTenant.id)}
-          ownerName={ownerName}
-          ownerPhone={ownerPhone}
-          onSaveAgreement={ag => {
-            if (onSaveAgreement) {
-              onSaveAgreement(ag);
-            }
-          }}
-          onClose={() => setSelectedAgreementTenant(null)}
-        />
-      )}
+      {selectedAgreementTenant && (() => {
+        const ag = findAgreementForTenant(selectedAgreementTenant);
+        return (
+          <RentAgreementModal
+            key={`${selectedAgreementTenant.id}-${ag?.tenantSignature ? 'tenant_signed' : 'tenant_pending'}-${ag?.ownerSignature ? 'owner_signed' : 'owner_pending'}-${ag?.status || 'draft'}-${ag?.signedPdfBase64 ? 'has_signed_pdf' : 'no_pdf'}`}
+            isOpen={Boolean(selectedAgreementTenant)}
+            tenant={selectedAgreementTenant}
+            property={property}
+            existingAgreement={ag}
+            ownerName={ownerName}
+            ownerPhone={ownerPhone}
+            onSaveAgreement={agSaved => {
+              if (onSaveAgreement) {
+                onSaveAgreement(agSaved);
+              }
+            }}
+            onClose={() => setSelectedAgreementTenant(null)}
+          />
+        );
+      })()}
 
       {/* Standalone Agreement Viewer Modal */}
       {viewingAgreement && (
@@ -565,7 +576,11 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
           property={property}
           onClose={() => setViewingAgreement(null)}
           onOpenEdit={() => {
-            const targetTenant = tenants.find(t => t.id === viewingAgreement.tenantId);
+            const targetTenant = tenants.find(
+              t => t.id === viewingAgreement.tenantId ||
+                   (viewingAgreement.tenantPhone && t.phone === viewingAgreement.tenantPhone) ||
+                   t.fullName.toLowerCase() === viewingAgreement.tenantName.toLowerCase()
+            );
             if (targetTenant) {
               setViewingAgreement(null);
               setSelectedAgreementTenant(targetTenant);

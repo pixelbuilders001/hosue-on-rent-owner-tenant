@@ -98,7 +98,11 @@ export function App() {
             });
 
             const enrichedTenants: Tenant[] = (liveData.tenants || []).map(t => {
-              const ag = mergedAgreements.find(a => a.tenantId === t.id);
+              const ag = mergedAgreements.find(
+                a => a.tenantId === t.id ||
+                     (a.tenantPhone && a.tenantPhone === t.phone) ||
+                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+              );
               if (ag) {
                 return {
                   ...t,
@@ -129,14 +133,18 @@ export function App() {
 
     // Cross-tab and window focus sync so owner tab updates immediately when tenant signs in another tab
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'roomsaathi_owner_state_v1' && e.newValue) {
+      if ((e.key === 'roomsaathi_clean_v2' || e.key === 'roomsaathi_owner_state_v1') && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           if (parsed && parsed.agreements) {
             setState(prev => {
               const merged = [...parsed.agreements];
               const updatedTenants: Tenant[] = prev.tenants.map(t => {
-                const matchedAg = merged.find((a: any) => a.tenantId === t.id);
+                const matchedAg = merged.find(
+                  (a: any) => a.tenantId === t.id ||
+                             (a.tenantPhone && a.tenantPhone === t.phone) ||
+                             (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+                );
                 if (matchedAg) {
                   return {
                     ...t,
@@ -176,7 +184,11 @@ export function App() {
             });
 
             const enrichedTenants: Tenant[] = prev.tenants.map(t => {
-              const ag = mergedAgreements.find(a => a.tenantId === t.id);
+              const ag = mergedAgreements.find(
+                a => a.tenantId === t.id ||
+                     (a.tenantPhone && a.tenantPhone === t.phone) ||
+                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+              );
               if (ag) {
                 return {
                   ...t,
@@ -196,6 +208,54 @@ export function App() {
         }
       });
     };
+
+    // Auto-polling every 4 seconds to sync any signed agreements in real time
+    const syncPollInterval = setInterval(() => {
+      fetchLiveSupabaseData().then(liveData => {
+        if (liveData?.agreements && liveData.agreements.length > 0) {
+          setState(prev => {
+            let hasNewUpdate = false;
+            const merged = [...prev.agreements];
+            liveData.agreements!.forEach(liveAg => {
+              const idx = merged.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
+              if (idx >= 0) {
+                if (liveAg.tenantSignature && !merged[idx].tenantSignature) {
+                  merged[idx] = liveAg;
+                  hasNewUpdate = true;
+                }
+              } else {
+                merged.push(liveAg);
+                hasNewUpdate = true;
+              }
+            });
+
+            if (!hasNewUpdate) return prev;
+
+            const enrichedTenants: Tenant[] = prev.tenants.map(t => {
+              const ag = merged.find(
+                a => a.tenantId === t.id ||
+                     (a.tenantPhone && a.tenantPhone === t.phone) ||
+                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+              );
+              if (ag) {
+                return {
+                  ...t,
+                  agreementId: ag.id,
+                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
+                };
+              }
+              return t;
+            });
+
+            return {
+              ...prev,
+              agreements: merged,
+              tenants: enrichedTenants
+            };
+          });
+        }
+      });
+    }, 4000);
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('focus', handleWindowFocus);
@@ -259,9 +319,18 @@ export function App() {
       });
 
       return () => {
+        clearInterval(syncPollInterval);
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('focus', handleWindowFocus);
         subscription.unsubscribe();
       };
     }
+
+    return () => {
+      clearInterval(syncPollInterval);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, []);
 
   // Filter properties based on authentication (only show host's properties if authenticated)
@@ -797,14 +866,17 @@ export function App() {
   const handleSaveAgreement = (agreement: RentAgreement) => {
     syncAgreementToSupabase(agreement);
     setState(prev => {
-      const existingIdx = prev.agreements.findIndex(a => a.id === agreement.id);
+      const existingIdx = prev.agreements.findIndex(a => a.id === agreement.id || a.signingToken === agreement.signingToken);
       const nextAgreements = existingIdx >= 0
         ? prev.agreements.map((a, i) => i === existingIdx ? agreement : a)
         : [agreement, ...prev.agreements];
 
+      const isCompleted = agreement.status === 'completed' || Boolean(agreement.tenantSignature);
+      const computedStatus = (isCompleted ? 'completed' : agreement.status) as Tenant['agreementStatus'];
+
       const nextTenants = prev.tenants.map(t =>
-        t.id === agreement.tenantId
-          ? { ...t, agreementId: agreement.id, agreementStatus: agreement.status }
+        (t.id === agreement.tenantId || (t.phone && t.phone === agreement.tenantPhone) || t.fullName === agreement.tenantName)
+          ? { ...t, agreementId: agreement.id, agreementStatus: computedStatus }
           : t
       );
 

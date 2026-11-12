@@ -1,6 +1,6 @@
 import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, RentAgreement } from '../types';
 
-const STORAGE_KEY = 'roomsaathi_clean_v2';
+export const STORAGE_KEY = 'roomsaathi_clean_v2';
 
 export interface AppState {
   profile: OwnerProfile;
@@ -80,7 +80,7 @@ import { supabase } from './supabase';
 export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null> {
   if (!supabase) return null;
   try {
-    const [propsRes, roomsRes, bedsRes, leadsRes, tenantsRes, rentsRes, compRes] = await Promise.all([
+    const [propsRes, roomsRes, bedsRes, leadsRes, tenantsRes, rentsRes, compRes, agreementsRes] = await Promise.all([
       supabase.from('properties').select('*').eq('is_active', true),
       supabase.from('rooms').select('*'),
       supabase.from('beds').select('*'),
@@ -88,6 +88,7 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
       supabase.from('rent_records').select('*').order('created_at', { ascending: false }),
       supabase.from('complaints').select('*').order('created_at', { ascending: false }),
+      supabase.from('agreements').select('*').order('created_at', { ascending: false })
     ]);
 
     const partial: Partial<AppState> = {
@@ -255,6 +256,44 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
             });
           }
         });
+
+        if (agreementsRes?.data && Array.isArray(agreementsRes.data)) {
+          agreementsRes.data.forEach((a: any) => {
+            const idx = agreementsList.findIndex(x => x.id === a.id);
+            const item: RentAgreement = {
+              id: a.id,
+              propertyId: a.property_id,
+              propertyName: a.property_name,
+              tenantId: a.tenant_id,
+              tenantName: a.tenant_name,
+              tenantPhone: a.tenant_phone,
+              tenantAadhaar: a.tenant_aadhaar,
+              ownerName: a.owner_name,
+              ownerPhone: a.owner_phone,
+              roomNumber: a.room_number,
+              monthlyRent: Number(a.monthly_rent) || 0,
+              depositAmount: Number(a.deposit_amount) || 0,
+              startDate: a.start_date,
+              durationMonths: Number(a.duration_months) || 11,
+              pdfFileName: a.pdf_file_name,
+              status: a.status,
+              ownerSignature: a.owner_signature,
+              ownerSignedAt: a.owner_signed_at,
+              tenantSignature: a.tenant_signature,
+              tenantSignedAt: a.tenant_signed_at,
+              signingToken: a.signing_token,
+              pdfBase64: a.pdf_base64,
+              signedPdfBase64: a.signed_pdf_base64,
+              createdAt: a.created_at
+            };
+            if (idx >= 0) {
+              agreementsList[idx] = item;
+            } else {
+              agreementsList.push(item);
+            }
+          });
+        }
+
         return {
           complaints: complaintsList,
           agreements: agreementsList
@@ -700,7 +739,27 @@ export async function syncComplaintStatusToSupabase(complaintId: string, status:
 export async function syncAgreementToSupabase(agreement: RentAgreement) {
   if (!supabase) return;
   try {
-    // 1. Persist to Supabase cloud sync record (guaranteed table)
+    // 1. Resolve safe property_id
+    let safePropertyId = agreement.propertyId;
+    const { data: propCheck } = await supabase.from('properties').select('id').eq('id', safePropertyId).maybeSingle();
+    if (!propCheck) {
+      const { data: anyProp } = await supabase.from('properties').select('id').limit(1).maybeSingle();
+      if (anyProp?.id) safePropertyId = anyProp.id;
+    }
+
+    // 2. Resolve safe tenant_id (must be valid UUID and present in tenants table, otherwise null)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agreement.tenantId);
+    let safeTenantId: string | null = isUuid ? agreement.tenantId : null;
+    if (safeTenantId) {
+      const { data: tCheck } = await supabase.from('tenants').select('id').eq('id', safeTenantId).maybeSingle();
+      if (!tCheck) {
+        safeTenantId = null;
+      }
+    }
+
+    // 3. Persist to complaints table as rock-solid JSON fallback (status must be 'open' or 'resolved')
+    const syncStatus = (agreement.status === 'completed' || Boolean(agreement.tenantSignature)) ? 'resolved' : 'open';
+
     const { data: existingSync } = await supabase
       .from('complaints')
       .select('id')
@@ -711,11 +770,11 @@ export async function syncAgreementToSupabase(agreement: RentAgreement) {
     if (existingSync) {
       await supabase.from('complaints').update({
         description: JSON.stringify(agreement),
-        status: agreement.status === 'completed' || agreement.tenantSignature ? 'resolved' : 'pending'
+        status: syncStatus
       }).eq('id', existingSync.id);
     } else {
       await supabase.from('complaints').insert({
-        property_id: agreement.propertyId,
+        property_id: safePropertyId,
         property_name: agreement.propertyName || 'Property',
         tenant_name: agreement.tenantName,
         room_number: agreement.roomNumber || '101',
@@ -723,16 +782,16 @@ export async function syncAgreementToSupabase(agreement: RentAgreement) {
         title: agreement.id,
         description: JSON.stringify(agreement),
         priority: 'low',
-        status: agreement.status === 'completed' || agreement.tenantSignature ? 'resolved' : 'pending'
+        status: syncStatus
       });
     }
 
-    // 2. Also attempt direct agreements table if available
+    // 4. Upsert to direct agreements table
     await supabase.from('agreements').upsert({
       id: agreement.id,
-      property_id: agreement.propertyId,
+      property_id: safePropertyId,
       property_name: agreement.propertyName,
-      tenant_id: agreement.tenantId,
+      tenant_id: safeTenantId,
       tenant_name: agreement.tenantName,
       tenant_phone: agreement.tenantPhone,
       tenant_aadhaar: agreement.tenantAadhaar || null,
@@ -755,7 +814,7 @@ export async function syncAgreementToSupabase(agreement: RentAgreement) {
       created_at: agreement.createdAt
     });
   } catch (e) {
-    console.warn('Agreement synced to local storage (Supabase cloud sync fallback)', e);
+    console.warn('Agreement sync error (stored locally as fallback)', e);
   }
 }
 
@@ -772,12 +831,14 @@ export async function syncAgreementUpdateToSupabase(
       .eq('title', agreementId)
       .maybeSingle();
 
+    const isDone = updates.status === 'completed' || Boolean(updates.tenantSignature);
+
     if (existingSync) {
       const prevData = JSON.parse(existingSync.description || '{}');
       const merged = { ...prevData, ...updates };
       await supabase.from('complaints').update({
         description: JSON.stringify(merged),
-        status: merged.status === 'completed' || merged.tenantSignature ? 'resolved' : 'pending'
+        status: isDone ? 'resolved' : 'open'
       }).eq('id', existingSync.id);
     }
 
