@@ -39,8 +39,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
   const avatarUrl = profile.avatarUrl;
-  const displayName = profile.fullName || 'Host';
-  const userInitial = displayName.charAt(0).toUpperCase() || 'H';
+  const displayName = profile.fullName || 'Owner';
+  const userInitial = displayName.charAt(0).toUpperCase() || 'O';
 
   const handleGoogleSignIn = async () => {
     if (supabase) {
@@ -100,7 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Active Session
               </span>
               <span className="text-[11px] font-semibold text-emerald-700">
-                Host Portal
+                Owner Portal
               </span>
             </div>
 
@@ -138,7 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 ⌂
               </div>
               <div>
-                <h3 className="font-extrabold text-slate-900 text-lg">RoomSaathi Host Portal</h3>
+                <h3 className="font-extrabold text-slate-900 text-lg">RoomSaathi Owner Portal</h3>
                 <p className="text-xs text-slate-500">Sign in with Google to manage your properties & rent collections</p>
               </div>
             </div>
@@ -166,7 +166,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                 />
               </svg>
-              <span>Continue with Google as Host</span>
+              <span>Continue with Google as Owner / Landlord</span>
             </button>
           </>
         )}

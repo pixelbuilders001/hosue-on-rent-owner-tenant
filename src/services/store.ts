@@ -495,7 +495,7 @@ export async function syncUpdatePropertyToSupabase(prop: Property): Promise<bool
       image: (prop.images && prop.images[0]) || prop.image || '',
       images: (prop.images && prop.images.length > 0) ? prop.images : (prop.image ? [prop.image] : []),
       description: prop.description,
-      owner_name: prop.ownerName || 'Host',
+      owner_name: prop.ownerName || 'Owner',
       rules: prop.rules || [],
       updated_label: 'Recently updated',
       is_active: prop.isActive ?? true,

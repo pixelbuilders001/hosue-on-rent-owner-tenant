@@ -294,7 +294,7 @@ export function App() {
     };
   }, []);
 
-  // Filter properties based on authentication (only show host's properties if authenticated)
+  // Filter properties based on authentication (only show owner's properties if authenticated)
   const displayProperties = (isAuthenticated && currentUserId)
     ? state.properties.filter(p => p.ownerId === currentUserId)
     : [];
@@ -922,7 +922,7 @@ export function App() {
       {/* Main App Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex min-w-0">
         
-        {/* Host Portal Sidebar */}
+        {/* Owner Portal Sidebar */}
         <Sidebar
           currentTab={currentTab}
           onSelectTab={(tab) => {
@@ -947,10 +947,10 @@ export function App() {
                 <Building2 size={32} />
               </div>
               <h2 className="text-xl font-bold text-slate-800 mb-2">
-                RoomSaathi Host Portal
+                RoomSaathi Owner Portal
               </h2>
               <p className="text-sm text-slate-500 mb-6">
-                Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely.
+                Sign in with Google to list your property, manage rooms & beds, record rent payments, and track tenant inquiries securely.
               </p>
               <button
                 onClick={() => setShowAuthModal(true)}
@@ -973,10 +973,10 @@ export function App() {
                   <Building2 size={32} />
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">
-                  Welcome, {state.profile.fullName || 'Host'}!
+                  Welcome, {state.profile.fullName || 'Owner'}!
                 </h2>
                 <p className="text-sm text-slate-500 mb-6">
-                  You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically.
+                  You haven't listed any properties yet. Add your PG, flat, or building to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically.
                 </p>
                 <button
                   onClick={handleOpenAddProperty}

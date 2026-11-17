@@ -42,8 +42,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const activeProperty = properties.find(p => p.id === activePropertyId) || properties[0];
 
   const avatarUrl = isAuthenticated ? profile.avatarUrl : '';
-  const displayName = isAuthenticated && profile.fullName ? profile.fullName.split(' ')[0] : 'Host';
-  const userInitial = displayName.charAt(0).toUpperCase() || 'H';
+  const displayName = isAuthenticated && profile.fullName ? profile.fullName.split(' ')[0] : 'Owner';
+  const userInitial = displayName.charAt(0).toUpperCase() || 'O';
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 tracking-tight text-sm sm:text-lg">RoomSaathi</span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider hidden sm:inline bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Host Portal
+                  Owner Portal
                 </span>
               </div>
             </div>
@@ -165,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onOpenProfile}
                 className="flex items-center gap-1.5 pl-1 pr-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition shrink-0 cursor-pointer"
-                title="Account & Host Profile"
+                title="Account & Owner Profile"
               >
                 {avatarUrl ? (
                   <img
@@ -183,7 +183,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {displayName}
                   </div>
                   <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
-                    <span>Host</span>
+                    <span>Owner</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Signed In" />
                   </div>
                 </div>

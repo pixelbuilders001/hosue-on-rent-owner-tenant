@@ -61,9 +61,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Building2 size={32} />
         </div>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Welcome to RoomSaathi Host Portal</h2>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Welcome to RoomSaathi Owner Portal</h2>
         <p className="text-sm text-slate-500 mb-6">
-          You haven't listed any property yet. Add your first PG, hostel, or flat to start managing rooms, beds, tenants, and tracking rent.
+          You haven't listed any property yet. Add your first PG, flat, or building to start managing rooms, beds, tenants, and tracking rent.
         </p>
         {onOpenAddProperty && (
           <button

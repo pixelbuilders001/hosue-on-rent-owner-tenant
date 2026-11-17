@@ -129,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="mt-auto pt-6 border-t border-slate-100">
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span>🏢</span> RoomSaathi Host OS
+              <span>🏢</span> RoomSaathi Owner OS
             </div>
             <p className="text-slate-500 mt-1 leading-relaxed text-[11px]">
               Dedicated Landlord Management Suite for properties, rooms, tenants & billing.
