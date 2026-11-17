@@ -26,6 +26,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [inputName, setInputName] = useState(profile.fullName);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      setInputPhone(profile.phone || '');
+      setInputName(profile.fullName || '');
+    } else {
+      setInputPhone('');
+      setInputName('');
+    }
+  }, [profile.phone, profile.fullName, isAuthenticated, isOpen]);
+
   if (!isOpen) return null;
 
   const avatarUrl = profile.avatarUrl;

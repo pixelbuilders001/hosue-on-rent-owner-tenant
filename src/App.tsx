@@ -16,6 +16,8 @@ import { TenantSignAgreementView } from './components/agreements/TenantSignAgree
 import { Building2, Plus, Lock } from 'lucide-react';
 import { 
   getInitialState, 
+  getCleanInitialState,
+  clearStoredState,
   saveState, 
   AppState,
   fetchLiveSupabaseData,
@@ -74,57 +76,73 @@ export function App() {
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Sync to localStorage on every state change
+  const authRef = React.useRef({ isAuthenticated, currentUserId });
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    authRef.current = { isAuthenticated, currentUserId };
+  }, [isAuthenticated, currentUserId]);
+
+  // Sync to localStorage only when user is genuinely authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentUserId) {
+      saveState(state);
+    }
+  }, [state, isAuthenticated, currentUserId]);
 
   // Fetch live Supabase data on mount & bind auth state & cross-tab sync
   useEffect(() => {
+    const applyLiveData = (liveData: any, targetUserId?: string) => {
+      setState(prev => {
+        const mergedAgreements = [...prev.agreements];
+        (liveData.agreements || []).forEach((liveAg: any) => {
+          const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
+          if (idx >= 0) {
+            if (liveAg.tenantSignature || liveAg.status === 'completed') {
+              mergedAgreements[idx] = liveAg;
+            }
+          } else {
+            mergedAgreements.push(liveAg);
+          }
+        });
+
+        const enrichedTenants: Tenant[] = (liveData.tenants || []).map((t: any) => {
+          const ag = mergedAgreements.find(
+            a => a.tenantId === t.id ||
+                 (a.tenantPhone && a.tenantPhone === t.phone) ||
+                 (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
+          );
+          if (ag) {
+            return {
+              ...t,
+              agreementId: ag.id,
+              agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
+            };
+          }
+          return t;
+        });
+
+        const activeUid = targetUserId !== undefined ? targetUserId : authRef.current.currentUserId;
+        const filteredProperties = activeUid
+          ? (liveData.properties || []).filter((p: any) => p.ownerId === activeUid)
+          : [];
+
+        return {
+          ...prev,
+          properties: filteredProperties,
+          rooms: liveData.rooms || [],
+          beds: liveData.beds || [],
+          leads: liveData.leads || [],
+          tenants: enrichedTenants,
+          rentRecords: liveData.rentRecords || [],
+          complaints: liveData.complaints || [],
+          agreements: mergedAgreements
+        };
+      });
+    };
+
     fetchLiveSupabaseData()
       .then(liveData => {
         if (liveData) {
-          setState(prev => {
-            const mergedAgreements = [...prev.agreements];
-            (liveData.agreements || []).forEach(liveAg => {
-              const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
-              if (idx >= 0) {
-                if (liveAg.tenantSignature || liveAg.status === 'completed') {
-                  mergedAgreements[idx] = liveAg;
-                }
-              } else {
-                mergedAgreements.push(liveAg);
-              }
-            });
-
-            const enrichedTenants: Tenant[] = (liveData.tenants || []).map(t => {
-              const ag = mergedAgreements.find(
-                a => a.tenantId === t.id ||
-                     (a.tenantPhone && a.tenantPhone === t.phone) ||
-                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
-              );
-              if (ag) {
-                return {
-                  ...t,
-                  agreementId: ag.id,
-                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
-                };
-              }
-              return t;
-            });
-
-            return {
-              ...prev,
-              properties: liveData.properties || [],
-              rooms: liveData.rooms || [],
-              beds: liveData.beds || [],
-              leads: liveData.leads || [],
-              tenants: enrichedTenants,
-              rentRecords: liveData.rentRecords || [],
-              complaints: liveData.complaints || [],
-              agreements: mergedAgreements
-            };
-          });
+          applyLiveData(liveData);
         }
       })
       .finally(() => {
@@ -168,91 +186,20 @@ export function App() {
     };
 
     const handleWindowFocus = () => {
+      if (!authRef.current.isAuthenticated && !signingTokenParam) return;
       fetchLiveSupabaseData().then(liveData => {
-        if (liveData && liveData.agreements && liveData.agreements.length > 0) {
-          setState(prev => {
-            const mergedAgreements = [...prev.agreements];
-            liveData.agreements!.forEach(liveAg => {
-              const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
-              if (idx >= 0) {
-                if (liveAg.tenantSignature || liveAg.status === 'completed') {
-                  mergedAgreements[idx] = liveAg;
-                }
-              } else {
-                mergedAgreements.push(liveAg);
-              }
-            });
-
-            const enrichedTenants: Tenant[] = prev.tenants.map(t => {
-              const ag = mergedAgreements.find(
-                a => a.tenantId === t.id ||
-                     (a.tenantPhone && a.tenantPhone === t.phone) ||
-                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
-              );
-              if (ag) {
-                return {
-                  ...t,
-                  agreementId: ag.id,
-                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
-                };
-              }
-              return t;
-            });
-
-            return {
-              ...prev,
-              agreements: mergedAgreements,
-              tenants: enrichedTenants
-            };
-          });
+        if (liveData) {
+          applyLiveData(liveData);
         }
       });
     };
 
     // Auto-polling every 4 seconds to sync any signed agreements in real time
     const syncPollInterval = setInterval(() => {
+      if (!authRef.current.isAuthenticated && !signingTokenParam) return;
       fetchLiveSupabaseData().then(liveData => {
-        if (liveData?.agreements && liveData.agreements.length > 0) {
-          setState(prev => {
-            let hasNewUpdate = false;
-            const merged = [...prev.agreements];
-            liveData.agreements!.forEach(liveAg => {
-              const idx = merged.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
-              if (idx >= 0) {
-                if (liveAg.tenantSignature && !merged[idx].tenantSignature) {
-                  merged[idx] = liveAg;
-                  hasNewUpdate = true;
-                }
-              } else {
-                merged.push(liveAg);
-                hasNewUpdate = true;
-              }
-            });
-
-            if (!hasNewUpdate) return prev;
-
-            const enrichedTenants: Tenant[] = prev.tenants.map(t => {
-              const ag = merged.find(
-                a => a.tenantId === t.id ||
-                     (a.tenantPhone && a.tenantPhone === t.phone) ||
-                     (a.tenantName && a.tenantName.toLowerCase() === t.fullName.toLowerCase())
-              );
-              if (ag) {
-                return {
-                  ...t,
-                  agreementId: ag.id,
-                  agreementStatus: ((ag.status === 'completed' || ag.tenantSignature) ? 'completed' : ag.status) as Tenant['agreementStatus']
-                };
-              }
-              return t;
-            });
-
-            return {
-              ...prev,
-              agreements: merged,
-              tenants: enrichedTenants
-            };
-          });
+        if (liveData) {
+          applyLiveData(liveData);
         }
       });
     }, 4000);
@@ -289,13 +236,23 @@ export function App() {
           ...prev,
           profile: {
             ...prev.profile,
+            id: user.id,
             fullName: realName || prev.profile.fullName,
             phone: realPhone || prev.profile.phone,
             email: user.email || prev.profile.email,
-            avatarUrl: realAvatar
+            avatarUrl: realAvatar,
+            businessName: prof?.business_name || prev.profile.businessName || '',
+            upiId: prof?.upi_id || prev.profile.upiId || '',
+            city: prof?.city || prev.profile.city || ''
           }
         }));
         setCurrentTab('dashboard');
+
+        fetchLiveSupabaseData().then(liveData => {
+          if (liveData) {
+            applyLiveData(liveData, user.id);
+          }
+        });
       };
 
       client.auth.getSession().then(({ data: { session } }) => {
@@ -305,16 +262,20 @@ export function App() {
           setIsAuthenticated(false);
           setCurrentUserId('');
           setUserEmail('');
+          clearStoredState();
+          setState(getCleanInitialState());
         }
       });
 
-      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) {
-          syncUserProfile(session.user);
-        } else {
+      const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT' || !session?.user) {
           setIsAuthenticated(false);
           setCurrentUserId('');
           setUserEmail('');
+          clearStoredState();
+          setState(getCleanInitialState());
+        } else if (session?.user) {
+          syncUserProfile(session.user);
         }
       });
 
@@ -334,11 +295,13 @@ export function App() {
   }, []);
 
   // Filter properties based on authentication (only show host's properties if authenticated)
-  const displayProperties = isAuthenticated && currentUserId
+  const displayProperties = (isAuthenticated && currentUserId)
     ? state.properties.filter(p => p.ownerId === currentUserId)
-    : state.properties;
+    : [];
 
-  const activeProperty = displayProperties.find(p => p.id === state.activePropertyId) || displayProperties[0] || null;
+  const activeProperty = (isAuthenticated && currentUserId)
+    ? (displayProperties.find(p => p.id === state.activePropertyId) || displayProperties[0] || null)
+    : null;
 
   // Add Property guard
   const handleOpenAddProperty = () => {
@@ -350,34 +313,34 @@ export function App() {
   };
 
   // Notification counts
-  const propLeads = activeProperty ? state.leads.filter(l => l.propertyId === activeProperty.id) : [];
-  const propRents = activeProperty ? state.rentRecords.filter(r => r.propertyId === activeProperty.id) : [];
-  const propComplaints = activeProperty ? state.complaints.filter(c => c.propertyId === activeProperty.id) : [];
+  const propLeads = (isAuthenticated && activeProperty) ? state.leads.filter(l => l.propertyId === activeProperty.id) : [];
+  const propRents = (isAuthenticated && activeProperty) ? state.rentRecords.filter(r => r.propertyId === activeProperty.id) : [];
+  const propComplaints = (isAuthenticated && activeProperty) ? state.complaints.filter(c => c.propertyId === activeProperty.id) : [];
 
-  const leadsCount = propLeads.filter(l => l.status === 'new').length;
-  const dueRentsCount = propRents.filter(r => r.status === 'overdue' || r.status === 'pending').length;
-  const openComplaintsCount = propComplaints.filter(c => c.status !== 'resolved').length;
+  const leadsCount = isAuthenticated ? propLeads.filter(l => l.status === 'new').length : 0;
+  const dueRentsCount = isAuthenticated ? propRents.filter(r => r.status === 'overdue' || r.status === 'pending').length : 0;
+  const openComplaintsCount = isAuthenticated ? propComplaints.filter(c => c.status !== 'resolved').length : 0;
   const totalUnreadCount = leadsCount + openComplaintsCount;
 
   // Logout Handler
   const handleLogout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.warn('SignOut error', err);
     }
+    clearStoredState();
     setIsAuthenticated(false);
     setCurrentUserId('');
     setUserEmail('');
     setShowAuthModal(false);
-    setState(prev => ({
-      ...prev,
-      profile: {
-        ...prev.profile,
-        fullName: 'Property Owner',
-        phone: '',
-        email: '',
-        avatarUrl: ''
-      }
-    }));
+    setShowAddPropertyModal(false);
+    setEditingProperty(null);
+    setSelectedReceiptRecord(null);
+    setCurrentTab('dashboard');
+    setState(getCleanInitialState());
   };
 
   // Toggle bed status cycle: available -> occupied -> reserved -> available
@@ -962,7 +925,13 @@ export function App() {
         {/* Host Portal Sidebar */}
         <Sidebar
           currentTab={currentTab}
-          onSelectTab={setCurrentTab}
+          onSelectTab={(tab) => {
+            if (!isAuthenticated) {
+              setShowAuthModal(true);
+              return;
+            }
+            setCurrentTab(tab);
+          }}
           language={language}
           leadsCount={leadsCount}
           dueRentsCount={dueRentsCount}
@@ -972,36 +941,52 @@ export function App() {
         {/* Tab View Container */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto min-w-0 w-full">
           
-          {!activeProperty && currentTab !== 'settings' ? (
+          {!isAuthenticated ? (
             <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
               <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Building2 size={32} />
               </div>
               <h2 className="text-xl font-bold text-slate-800 mb-2">
-                {isAuthenticated ? `Welcome, ${state.profile.fullName || 'Host'}!` : 'RoomSaathi Host Portal'}
+                RoomSaathi Host Portal
               </h2>
               <p className="text-sm text-slate-500 mb-6">
-                {isAuthenticated
-                  ? "You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically."
-                  : "Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely."}
+                Sign in with Google to list your PG or hostel, manage rooms & beds, record rent payments, and track student inquiries securely.
               </p>
               <button
-                onClick={handleOpenAddProperty}
+                onClick={() => setShowAuthModal(true)}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
               >
-                {isAuthenticated ? (
-                  <>
-                    <Plus size={18} />
-                    Add Your First Property
-                  </>
-                ) : (
-                  <>
-                    <Lock size={16} />
-                    Sign In to List Property
-                  </>
-                )}
+                <Lock size={16} />
+                Sign In to Access Portal
               </button>
             </div>
+          ) : !activeProperty ? (
+            currentTab === 'settings' ? (
+              <SettingsView
+                profile={state.profile}
+                language={language}
+                onUpdateProfile={handleUpdateProfile}
+              />
+            ) : (
+              <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Building2 size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">
+                  Welcome, {state.profile.fullName || 'Host'}!
+                </h2>
+                <p className="text-sm text-slate-500 mb-6">
+                  You haven't listed any properties yet. Add your PG, hostel, or flat to start managing rooms, tracking leads, onboarding tenants, and collecting rent automatically.
+                </p>
+                <button
+                  onClick={handleOpenAddProperty}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                >
+                  <Plus size={18} />
+                  Add Your First Property
+                </button>
+              </div>
+            )
           ) : (
             <>
               {currentTab === 'dashboard' && (
@@ -1090,15 +1075,15 @@ export function App() {
                   onAddComplaint={handleAddComplaint}
                 />
               )}
-            </>
-          )}
 
-          {currentTab === 'settings' && (
-            <SettingsView
-              profile={state.profile}
-              language={language}
-              onUpdateProfile={handleUpdateProfile}
-            />
+              {currentTab === 'settings' && (
+                <SettingsView
+                  profile={state.profile}
+                  language={language}
+                  onUpdateProfile={handleUpdateProfile}
+                />
+              )}
+            </>
           )}
 
         </main>
@@ -1142,7 +1127,7 @@ export function App() {
         />
       )}
 
-      {selectedReceiptRecord && (
+      {selectedReceiptRecord && activeProperty && (
         <ReceiptModal
           record={selectedReceiptRecord}
           property={activeProperty}

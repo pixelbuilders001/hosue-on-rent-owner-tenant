@@ -15,9 +15,9 @@ export interface AppState {
   activePropertyId: string;
 }
 
-const DEFAULT_PROFILE: OwnerProfile = {
-  id: 'owner-default',
-  fullName: 'Property Owner',
+export const DEFAULT_PROFILE: OwnerProfile = {
+  id: '',
+  fullName: '',
   phone: '',
   email: '',
   avatarUrl: '',
@@ -25,12 +25,12 @@ const DEFAULT_PROFILE: OwnerProfile = {
   role: 'owner',
   businessName: '',
   isKycVerified: false,
-  city: 'Samastipur, Bihar'
+  city: ''
 };
 
-export function getInitialState(): AppState {
-  const defaultInitial: AppState = {
-    profile: DEFAULT_PROFILE,
+export function getCleanInitialState(): AppState {
+  return {
+    profile: { ...DEFAULT_PROFILE },
     properties: [],
     rooms: [],
     beds: [],
@@ -41,6 +41,22 @@ export function getInitialState(): AppState {
     agreements: [],
     activePropertyId: ''
   };
+}
+
+export function clearStoredState(): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('roomsaathi_owner_state_v1');
+      sessionStorage.clear();
+    } catch (e) {
+      console.error('Failed to clear stored state from storage', e);
+    }
+  }
+}
+
+export function getInitialState(): AppState {
+  const defaultInitial = getCleanInitialState();
 
   if (typeof window === 'undefined') {
     return defaultInitial;
@@ -50,18 +66,19 @@ export function getInitialState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const cleanProperties = (parsed.properties || []).filter((p: any) => p.ownerId !== 'owner-rajesh-01' && p.ownerId !== 'owner-default');
-      return {
-        ...defaultInitial,
-        ...parsed,
-        properties: cleanProperties
-      };
+      if (parsed?.profile?.id && parsed.profile.id !== 'owner-default') {
+        const cleanProperties = (parsed.properties || []).filter((p: any) => p.ownerId !== 'owner-rajesh-01' && p.ownerId !== 'owner-default');
+        return {
+          ...defaultInitial,
+          ...parsed,
+          properties: cleanProperties
+        };
+      }
     }
   } catch (e) {
     console.error('Failed to load state from localStorage', e);
   }
 
-  saveState(defaultInitial);
   return defaultInitial;
 }
 

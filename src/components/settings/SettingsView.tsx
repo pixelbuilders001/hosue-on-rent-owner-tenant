@@ -34,6 +34,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [city, setCity] = useState(profile.city);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  React.useEffect(() => {
+    setFullName(profile.fullName || '');
+    setPhone(profile.phone || '');
+    setEmail(profile.email || '');
+    setBusinessName(profile.businessName || '');
+    setUpiId(profile.upiId || '');
+    setCity(profile.city || '');
+  }, [profile]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateProfile({

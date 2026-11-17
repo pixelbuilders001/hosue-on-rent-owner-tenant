@@ -5,7 +5,8 @@ import {
   Bell, 
   ChevronDown, 
   Plus, 
-  LogOut
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { OwnerProfile, Property, Language } from '../../types';
 import { t } from '../../services/i18n';
@@ -40,8 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showPropertyMenu, setShowPropertyMenu] = useState(false);
   const activeProperty = properties.find(p => p.id === activePropertyId) || properties[0];
 
-  const avatarUrl = profile.avatarUrl;
-  const displayName = profile.fullName ? profile.fullName.split(' ')[0] : 'Host';
+  const avatarUrl = isAuthenticated ? profile.avatarUrl : '';
+  const displayName = isAuthenticated && profile.fullName ? profile.fullName.split(' ')[0] : 'Host';
   const userInitial = displayName.charAt(0).toUpperCase() || 'H';
 
   return (
@@ -63,69 +64,73 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Desktop Property Selector (hidden on mobile) */}
-            <div className="relative hidden sm:block ml-1">
+            {/* Desktop Property Selector (hidden on mobile, only when authenticated with properties) */}
+            {isAuthenticated && properties.length > 0 && (
+              <div className="relative hidden sm:block ml-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPropertyMenu(prev => !prev)}
+                  className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 transition cursor-pointer"
+                >
+                  <Building2 size={14} className="text-emerald-700 shrink-0" />
+                  <span className="truncate max-w-[140px] md:max-w-[180px]">
+                    {activeProperty?.name || 'Select Property'}
+                  </span>
+                  <ChevronDown size={13} className="text-slate-500 shrink-0" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showPropertyMenu && (
+                  <div className="absolute left-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-1 z-50">
+                    <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      {t(language, 'switchProperty')}
+                    </div>
+                    {properties.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          onSelectProperty(p.id);
+                          setShowPropertyMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-emerald-50 transition cursor-pointer ${
+                          p.id === activePropertyId ? 'bg-emerald-50/70 font-semibold text-emerald-900' : 'text-slate-700'
+                        }`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                          {p.availableBeds} free
+                        </span>
+                      </button>
+                    ))}
+                    <div className="border-t border-slate-100 mt-1 pt-1">
+                      <button
+                        onClick={() => {
+                          setShowPropertyMenu(false);
+                          onOpenAddProperty();
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus size={14} /> Add New Property
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Center: Quick Add Property CTA (Desktop, only when authenticated) */}
+          {isAuthenticated && (
+            <div className="hidden md:flex items-center">
               <button
-                type="button"
-                onClick={() => setShowPropertyMenu(prev => !prev)}
-                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 transition cursor-pointer"
+                onClick={onOpenAddProperty}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
               >
-                <Building2 size={14} className="text-emerald-700 shrink-0" />
-                <span className="truncate max-w-[140px] md:max-w-[180px]">
-                  {activeProperty?.name || 'Select Property'}
-                </span>
-                <ChevronDown size={13} className="text-slate-500 shrink-0" />
+                <Plus size={14} />
+                <span>Add Property</span>
               </button>
-
-              {/* Dropdown Menu */}
-              {showPropertyMenu && (
-                <div className="absolute left-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-1 z-50">
-                  <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    {t(language, 'switchProperty')}
-                  </div>
-                  {properties.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        onSelectProperty(p.id);
-                        setShowPropertyMenu(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-emerald-50 transition cursor-pointer ${
-                        p.id === activePropertyId ? 'bg-emerald-50/70 font-semibold text-emerald-900' : 'text-slate-700'
-                      }`}
-                    >
-                      <span className="truncate">{p.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                        {p.availableBeds} free
-                      </span>
-                    </button>
-                  ))}
-                  <div className="border-t border-slate-100 mt-1 pt-1">
-                    <button
-                      onClick={() => {
-                        setShowPropertyMenu(false);
-                        onOpenAddProperty();
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus size={14} /> Add New Property
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-
-          {/* Center: Quick Add Property CTA (Desktop) */}
-          <div className="hidden md:flex items-center">
-            <button
-              onClick={onOpenAddProperty}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>Add Property</span>
-            </button>
-          </div>
+          )}
 
           {/* Right: Language, Notifications, Profile, Logout */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -140,46 +145,59 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>{language === 'en' ? 'हिन्दी' : 'English'}</span>
             </button>
 
-            {/* Notification Bell */}
-            <button
-              className="relative p-1.5 sm:p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition shrink-0"
-              title="Notifications"
-            >
-              <Bell size={17} />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center ring-2 ring-white animate-pulse">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+            {/* Notification Bell (only when authenticated) */}
+            {isAuthenticated && (
+              <button
+                className="relative p-1.5 sm:p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition shrink-0"
+                title="Notifications"
+              >
+                <Bell size={17} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center ring-2 ring-white animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            )}
 
-            {/* Profile Avatar / Trigger */}
-            <button
-              onClick={onOpenProfile}
-              className="flex items-center gap-1.5 pl-1 pr-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition shrink-0"
-              title={isAuthenticated ? "Account & Host Profile" : "Sign In / Profile"}
-            >
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="Profile"
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-1 ring-emerald-600/30"
-                />
-              ) : (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold ring-1 ring-white bg-emerald-700">
-                  {userInitial}
+            {/* Profile Avatar / Sign In Trigger */}
+            {isAuthenticated ? (
+              <button
+                onClick={onOpenProfile}
+                className="flex items-center gap-1.5 pl-1 pr-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition shrink-0 cursor-pointer"
+                title="Account & Host Profile"
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-1 ring-emerald-600/30"
+                  />
+                ) : (
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold ring-1 ring-white bg-emerald-700">
+                    {userInitial}
+                  </div>
+                )}
+                <div className="text-left hidden lg:block">
+                  <div className="text-xs font-semibold text-slate-900 leading-tight">
+                    {displayName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
+                    <span>Host</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Signed In" />
+                  </div>
                 </div>
-              )}
-              <div className="text-left hidden lg:block">
-                <div className="text-xs font-semibold text-slate-900 leading-tight">
-                  {displayName}
-                </div>
-                <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
-                  <span>Host</span>
-                  {isAuthenticated && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Signed In" />}
-                </div>
-              </div>
-            </button>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenProfile}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition text-xs font-semibold shrink-0 cursor-pointer shadow-xs"
+                title="Sign In"
+              >
+                <LogIn size={13} />
+                <span>Sign In</span>
+              </button>
+            )}
 
             {/* Quick Logout Button when Authenticated */}
             {isAuthenticated && (
@@ -198,8 +216,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         </div>
 
-        {/* Mobile Dedicated Sub-bar for Owner Property Selector */}
-        <div className="sm:hidden pb-2 pt-0 flex items-center justify-between gap-2 border-t border-slate-100 mt-1">
+        {/* Mobile Dedicated Sub-bar for Owner Property Selector (only when authenticated with properties) */}
+        {isAuthenticated && properties.length > 0 && (
+          <div className="sm:hidden pb-2 pt-0 flex items-center justify-between gap-2 border-t border-slate-100 mt-1">
             <div className="relative flex-1 min-w-0 pt-1.5">
               <button
                 type="button"
@@ -260,6 +279,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Add</span>
             </button>
           </div>
+        )}
       </div>
     </header>
   );
