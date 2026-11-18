@@ -34,6 +34,8 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ArrowRight,
   BedDouble,
   Home,
@@ -79,6 +81,17 @@ const DEFAULT_AMENITY_OPTIONS = [
   'Balcony / Terrace',
   'Lift Access',
   'Gated Society Security'
+];
+
+const ESSENTIAL_AMENITIES = [
+  'High Speed WiFi',
+  'RO Drinking Water',
+  '24x7 Power Backup',
+  'Daily Cleaning',
+  'Attached Washroom',
+  'Geyser (Hot Water)',
+  'AC',
+  'CCTV Security'
 ];
 
 const ENTIRE_HOUSE_AMENITY_PRESETS = [
@@ -229,6 +242,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<'saving' | 'success' | null>(null);
+  const [showUtilityDetails, setShowUtilityDetails] = useState(false);
+  const [showAllAmenities, setShowAllAmenities] = useState(false);
   const fileInputRef0 = React.useRef<HTMLInputElement>(null);
   const fileInputRef1 = React.useRef<HTMLInputElement>(null);
   const fileInputRef2 = React.useRef<HTMLInputElement>(null);
@@ -875,7 +890,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                       alt={`Property Photo ${slotIdx + 1}`} 
                       className="w-full h-full object-cover" 
                     />
-                    <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 p-2">
+                    <div className="absolute bottom-0 inset-x-0 p-1.5 bg-slate-900/80 sm:bg-slate-900/60 sm:inset-0 sm:opacity-0 sm:group-hover:opacity-100 transition flex items-center justify-center gap-1.5 backdrop-blur-xs sm:backdrop-blur-none">
                       <button
                         type="button"
                         onClick={() => setCameraModalSlot(slotIdx)}
@@ -979,8 +994,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-6 max-h-[92vh] flex flex-col relative overflow-hidden">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+      <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-3xl shadow-2xl border-0 sm:border sm:border-slate-200 flex flex-col relative overflow-hidden">
         
         {/* Full Modal Submission Loader Overlay */}
         {isSubmitting && (
@@ -1025,19 +1040,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-7 sm:py-4 border-b border-slate-100 shrink-0 bg-white">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <Building2 size={20} />
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">
                 {isEditMode ? 'Edit Property Details' : 'Add New Property / Hostel'}
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500 truncate">
                 {isEditMode 
-                  ? `Update information, amenities, rules, and pricing for ${initialProperty?.name}`
-                  : 'Configure listing details, image uploads, and transit distances'}
+                  ? `Update info and pricing for ${initialProperty?.name}`
+                  : 'Configure listing details, images, and transit distances'}
               </p>
             </div>
           </div>
@@ -1045,9 +1060,10 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             type="button" 
             onClick={onClose} 
             disabled={isSubmitting}
-            className={`text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer ${
+            className={`text-slate-400 hover:text-slate-600 p-2 sm:p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center shrink-0 ${
               isSubmitting ? 'opacity-30 cursor-not-allowed' : ''
             }`}
+            aria-label="Close modal"
           >
             <X size={18} />
           </button>
@@ -1055,7 +1071,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
 
         {/* Auth alert if guest */}
         {!isAuthenticated && (
-          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 text-amber-900 text-xs flex items-center justify-between mt-3 shrink-0">
+          <div className="mx-4 sm:mx-7 mt-2.5 bg-amber-50 border border-amber-200/80 rounded-2xl p-3 text-amber-900 text-xs flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <Lock size={15} className="text-amber-700 shrink-0" />
               <span>Sign in required to publish your property on RoomSaathi.</span>
@@ -1066,7 +1082,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 onClose();
                 if (onRequireAuth) onRequireAuth();
               }}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0"
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0 cursor-pointer"
             >
               Sign In
             </button>
@@ -1074,7 +1090,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         )}
 
         {/* Step Progress Bar & Tab Stepper */}
-        <div className="pt-2.5 pb-1 shrink-0 border-b border-slate-100">
+        <div className="px-4 py-2 sm:px-7 sm:py-2.5 shrink-0 border-b border-slate-100 bg-slate-50/70">
           <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1.5">
             <span className="text-slate-800">
               {stepsList.find(s => s.id === activeTab)?.fullTitle}
@@ -1087,7 +1103,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </span>
           </div>
 
-          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
+          <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden mb-2">
             <div 
               className="bg-emerald-600 h-full transition-all duration-300 rounded-full"
               style={{
@@ -1100,7 +1116,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
           </div>
 
           {/* Interactive Stepper Navigation buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-semibold">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs font-semibold no-scrollbar">
             {stepsList.map(step => {
               const isCurrent = activeTab === step.id;
               const isCompleted = 
@@ -1133,7 +1149,8 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
         </div>
 
         {/* Form Container */}
-        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex-1 overflow-y-auto pt-3.5 pb-2 text-xs space-y-4">
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-4 py-3.5 sm:px-7 sm:py-5 space-y-4 overscroll-contain text-xs">
           
           {/* Global Inline Notice Banner */}
           {formNotice && (
@@ -1769,9 +1786,42 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                       className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-slate-300"
                     />
                   </div>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    {category === 'entire_house' ? 'Typically 1-2 months advance rent' : 'Refundable deposit upon vacating'}
-                  </span>
+                  {/* Quick 1-tap deposit chips */}
+                  <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto no-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setDeposit(baseRent || 0)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition shrink-0 cursor-pointer ${
+                        deposit === baseRent && baseRent > 0
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      1 Mo ({baseRent ? `₹${baseRent.toLocaleString('en-IN')}` : '₹0'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeposit((baseRent || 0) * 2)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition shrink-0 cursor-pointer ${
+                        deposit === (baseRent || 0) * 2 && baseRent > 0
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      2 Mo ({baseRent ? `₹${(baseRent * 2).toLocaleString('en-IN')}` : '₹0'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeposit(0)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition shrink-0 cursor-pointer ${
+                        deposit === 0
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      ₹0 (No Deposit)
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1801,107 +1851,136 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                 </div>
               </div>
 
-              {/* Electricity Configuration */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-                <label className="block font-bold text-slate-800 text-xs">⚡ Electricity Billing</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setElectricityType('meter_unit')}
-                    className={`p-2 rounded-xl border text-center transition ${
-                      electricityType === 'meter_unit'
-                        ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    Meter Unit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setElectricityType('included')}
-                    className={`p-2 rounded-xl border text-center transition ${
-                      electricityType === 'included'
-                        ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    Included in Rent
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setElectricityType('fixed')}
-                    className={`p-2 rounded-xl border text-center transition ${
-                      electricityType === 'fixed'
-                        ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    Fixed Charge
-                  </button>
-                </div>
-
-                {electricityType === 'meter_unit' && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-slate-600">Rate:</span>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={electricityRate}
-                      onChange={e => setElectricityRate(Number(e.target.value))}
-                      className="w-20 px-2 py-1 text-sm font-bold rounded-lg border border-slate-300"
-                    />
-                    <span className="text-slate-600">₹ per unit</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Wi-Fi & Food Utilities */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-                  <label className="block font-bold text-slate-800 text-xs">📶 High Speed Wi-Fi</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={wifiCost}
-                      onChange={e => setWifiCost(Number(e.target.value))}
-                      className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
-                    />
-                    <span className="text-slate-600">₹/mo (0 if free)</span>
-                  </div>
-                </div>
-
-                {category !== 'entire_house' ? (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-800 text-xs">🍲 Food / Mess</label>
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={foodAvailable}
-                          onChange={e => setFoodAvailable(e.target.checked)}
-                          className="rounded text-emerald-600"
-                        />
-                        <span className="text-[11px] text-slate-600">Available</span>
-                      </label>
+              {/* Collapsible Utility, Sub-meter & Mess Rates */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/60 transition-all">
+                <button
+                  type="button"
+                  onClick={() => setShowUtilityDetails(prev => !prev)}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-slate-100/70 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                      <Zap size={13} />
                     </div>
-                    {foodAvailable && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <input
-                          type="number"
-                          value={foodCost}
-                          onChange={e => setFoodCost(Number(e.target.value))}
-                          className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
-                        />
-                        <span className="text-slate-600">₹/mo</span>
-                      </div>
-                    )}
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs text-slate-900 truncate">Utilities, Electricity & Food (Optional)</h4>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {electricityType === 'meter_unit' ? `⚡ Sub-meter (₹${electricityRate}/unit)` : electricityType === 'included' ? '⚡ Electricity Included' : '⚡ Fixed Electricity'} • 📶 Wi-Fi ₹{wifiCost}/mo
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 flex flex-col justify-center">
-                    <label className="font-bold text-slate-800 text-xs">🍳 Kitchen & Cooking</label>
-                    <p className="text-[11px] text-slate-500 leading-snug">
-                      Private kitchen for tenant self-cooking. No commercial mess fees.
-                    </p>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 shrink-0 ml-2">
+                    <span>{showUtilityDetails ? 'Hide' : 'Customize'}</span>
+                    {showUtilityDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </div>
+                </button>
+
+                {showUtilityDetails && (
+                  <div className="p-3 pt-2 space-y-3 border-t border-slate-200/70 bg-white animate-fadeIn">
+                    {/* Electricity Configuration */}
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                      <label className="block font-bold text-slate-800 text-xs">⚡ Electricity Billing</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setElectricityType('meter_unit')}
+                          className={`p-2 rounded-xl border text-center transition cursor-pointer ${
+                            electricityType === 'meter_unit'
+                              ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
+                              : 'bg-white border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          Meter Unit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setElectricityType('included')}
+                          className={`p-2 rounded-xl border text-center transition cursor-pointer ${
+                            electricityType === 'included'
+                              ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
+                              : 'bg-white border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          Included in Rent
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setElectricityType('fixed')}
+                          className={`p-2 rounded-xl border text-center transition cursor-pointer ${
+                            electricityType === 'fixed'
+                              ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-800'
+                              : 'bg-white border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          Fixed Charge
+                        </button>
+                      </div>
+
+                      {electricityType === 'meter_unit' && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-slate-600">Rate:</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={electricityRate}
+                            onChange={e => setElectricityRate(Number(e.target.value))}
+                            className="w-20 px-2 py-1 text-sm font-bold rounded-lg border border-slate-300"
+                          />
+                          <span className="text-slate-600">₹ per unit</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Wi-Fi & Food Utilities */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                        <label className="block font-bold text-slate-800 text-xs">📶 High Speed Wi-Fi</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={wifiCost}
+                            onChange={e => setWifiCost(Number(e.target.value))}
+                            className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
+                          />
+                          <span className="text-slate-600">₹/mo (0 if free)</span>
+                        </div>
+                      </div>
+
+                      {category !== 'entire_house' ? (
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="font-bold text-slate-800 text-xs">🍲 Food / Mess</label>
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={foodAvailable}
+                                onChange={e => setFoodAvailable(e.target.checked)}
+                                className="rounded text-emerald-600"
+                              />
+                              <span className="text-[11px] text-slate-600">Available</span>
+                            </label>
+                          </div>
+                          {foodAvailable && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <input
+                                type="number"
+                                value={foodCost}
+                                onChange={e => setFoodCost(Number(e.target.value))}
+                                className="w-24 px-2 py-1 text-sm rounded-lg border border-slate-300 font-bold"
+                              />
+                              <span className="text-slate-600">₹/mo</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 flex flex-col justify-center">
+                          <label className="font-bold text-slate-800 text-xs">🍳 Kitchen & Cooking</label>
+                          <p className="text-[11px] text-slate-500 leading-snug">
+                            Private kitchen for tenant self-cooking. No commercial mess fees.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1956,25 +2035,39 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {DEFAULT_AMENITY_OPTIONS.map(a => {
+                  {DEFAULT_AMENITY_OPTIONS.filter(a => showAllAmenities || ESSENTIAL_AMENITIES.includes(a) || selectedAmenities.includes(a)).map(a => {
                     const isSelected = selectedAmenities.includes(a);
                     return (
                       <button
                         type="button"
                         key={a}
                         onClick={() => toggleAmenity(a)}
-                        className={`px-2.5 py-1.5 rounded-xl border text-left transition flex items-center justify-between text-[11px] cursor-pointer ${
+                        className={`px-2.5 py-2 rounded-xl border text-left transition flex items-center justify-between text-xs cursor-pointer active:scale-98 ${
                           isSelected
-                            ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-900'
+                            ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-900 shadow-2xs'
                             : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                         }`}
                       >
                         <span className="truncate">{a}</span>
-                        {isSelected && <Check size={12} className="text-emerald-700 shrink-0" />}
+                        {isSelected && <Check size={13} className="text-emerald-700 shrink-0" />}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* Progressive disclosure: Show more amenities */}
+                <button
+                  type="button"
+                  onClick={() => setShowAllAmenities(prev => !prev)}
+                  className="w-full mt-2 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200/80 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <span>
+                    {showAllAmenities
+                      ? 'Show Fewer Amenities'
+                      : `+ ${DEFAULT_AMENITY_OPTIONS.filter(a => !ESSENTIAL_AMENITIES.includes(a) && !selectedAmenities.includes(a)).length} More Amenities (Cooler, Lift, Parking, etc.)`}
+                  </span>
+                  {showAllAmenities ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
 
                 {/* Add Custom Amenity */}
                 <div className="flex items-center gap-2 mt-2">
@@ -2242,13 +2335,15 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
             </div>
           )}
 
-          {/* Bottom Actions */}
-          <div className="pt-3 flex items-center justify-between border-t border-slate-100 shrink-0">
+          </div>
+
+          {/* Sticky Bottom Actions */}
+          <div className="border-t border-slate-200 bg-white/95 backdrop-blur-md px-4 py-3 sm:px-7 sm:py-3.5 flex items-center justify-between gap-2 shrink-0 z-10 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className={`px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer ${
+              className={`px-3.5 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-xs cursor-pointer ${
                 isSubmitting ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
               }`}
             >
@@ -2274,19 +2369,19 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({
                   type="button"
                   onClick={handleNextTab}
                   disabled={isSubmitting}
-                  className="px-4 py-2 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs text-xs flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2.5 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition shadow-xs text-xs flex items-center gap-1.5 cursor-pointer active:scale-98"
                 >
                   <span>
-                    {activeTab === 'basic' && 'Next: Pricing & Utilities →'}
-                    {activeTab === 'pricing' && 'Next: Amenities & Rules →'}
-                    {activeTab === 'amenities' && 'Next: Rooms & Final Review (Step 4) →'}
+                    {activeTab === 'basic' && 'Next: Pricing →'}
+                    {activeTab === 'pricing' && 'Next: Amenities →'}
+                    {activeTab === 'amenities' && 'Next: Photos & Finish →'}
                   </span>
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={!isAuthenticated || uploadingSlot !== null || isSubmitting}
-                  className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer ${
+                  className={`px-5 py-2.5 font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer active:scale-98 ${
                     !isAuthenticated || uploadingSlot !== null || isSubmitting
                       ? 'bg-emerald-800/80 cursor-not-allowed opacity-80'
                       : 'bg-emerald-700 hover:bg-emerald-800'
