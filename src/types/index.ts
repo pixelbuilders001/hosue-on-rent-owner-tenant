@@ -162,6 +162,39 @@ export interface RentRecord {
   paidDate?: string;
   paymentMethod?: 'UPI' | 'Cash' | 'Bank Transfer';
   transactionRef?: string;
+  meterPhotoUrl?: string; // Sub-meter reading photo audit snapshot
+}
+
+export type ExpenseCategory = 
+  | 'Plumbing' 
+  | 'Electrical' 
+  | 'Water Tanker' 
+  | 'WiFi' 
+  | 'Cleaning & Sweeper' 
+  | 'Repairs & Painting' 
+  | 'Govt & Municipal' 
+  | 'Other';
+
+export interface PropertyExpense {
+  id: string;
+  propertyId: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  paidTo?: string; // Vendor/worker name
+  notes?: string;
+  receiptPhoto?: string;
+  createdAt: string;
+}
+
+export interface NoticeTemplate {
+  id: string;
+  title: string;
+  category: 'water' | 'rent' | 'wifi' | 'gate' | 'festival' | 'custom';
+  subject: string;
+  messageTemplate: string;
+  iconName: string;
 }
 
 export interface Complaint {

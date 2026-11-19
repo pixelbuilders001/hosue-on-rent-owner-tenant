@@ -6,6 +6,8 @@ import { RoomsBedsView } from './components/rooms/RoomsBedsView';
 import { LeadsView } from './components/leads/LeadsView';
 import { TenantsView } from './components/tenants/TenantsView';
 import { BillingView } from './components/billing/BillingView';
+import { ExpensesView } from './components/expenses/ExpensesView';
+import { BroadcastView } from './components/broadcast/BroadcastView';
 import { ComplaintsView } from './components/complaints/ComplaintsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { AddPropertyModal } from './components/common/AddPropertyModal';
@@ -35,6 +37,8 @@ import {
   syncRoomStatusToSupabase,
   syncUpdatePropertyToSupabase,
   syncAgreementToSupabase,
+  syncExpenseToSupabase,
+  syncDeleteExpenseFromSupabase,
   generateUUID
 } from './services/store';
 import { supabase } from './services/supabase';
@@ -48,7 +52,8 @@ import {
   Complaint, 
   OwnerProfile, 
   Language,
-  RentAgreement
+  RentAgreement,
+  PropertyExpense
 } from './types';
 
 export function App() {
@@ -705,6 +710,36 @@ export function App() {
     }));
   };
 
+  // Expenses Handlers
+  const handleAddExpense = (expense: Omit<PropertyExpense, 'id' | 'createdAt'>) => {
+    const newExpense: PropertyExpense = {
+      ...expense,
+      id: generateUUID(),
+      createdAt: new Date().toISOString()
+    };
+    syncExpenseToSupabase(newExpense);
+    setState(prev => ({
+      ...prev,
+      expenses: [newExpense, ...(prev.expenses || [])]
+    }));
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    syncDeleteExpenseFromSupabase(id);
+    setState(prev => ({
+      ...prev,
+      expenses: (prev.expenses || []).filter(e => e.id !== id)
+    }));
+  };
+
+  // Police Verification Status Handler
+  const handleUpdatePoliceVerificationStatus = (tenantId: string, status: Tenant['policeVerificationStatus']) => {
+    setState(prev => ({
+      ...prev,
+      tenants: prev.tenants.map(t => t.id === tenantId ? { ...t, policeVerificationStatus: status } : t)
+    }));
+  };
+
   // Add Property
   const handleAddProperty = async (prop: Omit<Property, 'id' | 'createdAt'>, initialRooms: number) => {
     if (!isAuthenticated || !currentUserId) {
@@ -1045,9 +1080,11 @@ export function App() {
                   agreements={state.agreements}
                   ownerName={state.profile.fullName}
                   ownerPhone={state.profile.phone}
+                  profile={state.profile}
                   onAddTenant={handleAddTenant}
                   onVacateTenant={handleVacateTenant}
                   onSaveAgreement={handleSaveAgreement}
+                  onUpdatePoliceVerificationStatus={handleUpdatePoliceVerificationStatus}
                 />
               )}
 
@@ -1063,6 +1100,27 @@ export function App() {
                   onRecordRentPayment={handleRecordRentPayment}
                   onUpdatePaymentStatus={handleUpdatePaymentStatus}
                   onViewReceipt={setSelectedReceiptRecord}
+                />
+              )}
+
+              {currentTab === 'expenses' && (
+                <ExpensesView
+                  property={activeProperty}
+                  rentRecords={state.rentRecords}
+                  expenses={state.expenses || []}
+                  language={language}
+                  onAddExpense={handleAddExpense}
+                  onDeleteExpense={handleDeleteExpense}
+                />
+              )}
+
+              {currentTab === 'broadcast' && (
+                <BroadcastView
+                  property={activeProperty}
+                  tenants={state.tenants}
+                  rooms={state.rooms}
+                  profile={state.profile}
+                  language={language}
                 />
               )}
 

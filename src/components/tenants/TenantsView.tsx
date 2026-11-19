@@ -10,9 +10,10 @@ import {
   Eye,
   Settings
 } from 'lucide-react';
-import { Property, Tenant, Room, Bed, Language, RentAgreement } from '../../types';
+import { Property, Tenant, Room, Bed, Language, RentAgreement, OwnerProfile } from '../../types';
 import { RentAgreementModal } from '../agreements/RentAgreementModal';
 import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
+import { PoliceVerificationModal } from './PoliceVerificationModal';
 
 interface TenantsViewProps {
   property: Property;
@@ -23,9 +24,11 @@ interface TenantsViewProps {
   agreements?: RentAgreement[];
   ownerName?: string;
   ownerPhone?: string;
+  profile?: OwnerProfile;
   onAddTenant: (tenant: Omit<Tenant, 'id'>) => void;
   onVacateTenant: (tenantId: string, bedId?: string, refundAmount?: number) => void;
   onSaveAgreement?: (agreement: RentAgreement) => void;
+  onUpdatePoliceVerificationStatus?: (tenantId: string, status: Tenant['policeVerificationStatus']) => void;
 }
 
 export const TenantsView: React.FC<TenantsViewProps> = ({
@@ -37,12 +40,15 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
   agreements = [],
   ownerName = '',
   ownerPhone = '',
+  profile,
   onAddTenant,
   onVacateTenant,
-  onSaveAgreement
+  onSaveAgreement,
+  onUpdatePoliceVerificationStatus
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAgreementTenant, setSelectedAgreementTenant] = useState<Tenant | null>(null);
+  const [policeVerificationTenant, setPoliceVerificationTenant] = useState<Tenant | null>(null);
   const [viewingAgreement, setViewingAgreement] = useState<RentAgreement | null>(null);
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [vacateTarget, setVacateTarget] = useState<Tenant | null>(null);
@@ -209,10 +215,34 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                     <span className="font-medium text-slate-800">{tenant.emergencyPhone || 'Not provided'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">ID Verification:</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
-                      <ShieldCheck size={13} /> {tenant.idProofType} ({tenant.policeVerificationStatus})
+                    <span className="text-slate-400">ID Document:</span>
+                    <span className="font-semibold text-slate-800 text-[11px]">
+                      {tenant.idProofType} ({tenant.idProofNumber || 'Submitted'})
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Police Verification:</span>
+                    <button
+                      type="button"
+                      onClick={() => setPoliceVerificationTenant(tenant)}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                        tenant.policeVerificationStatus === 'verified'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                          : tenant.policeVerificationStatus === 'submitted'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                          : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                      title="Generate official State Police Verification Form"
+                    >
+                      <ShieldCheck size={11} className={
+                        tenant.policeVerificationStatus === 'verified' ? 'text-emerald-700' :
+                        tenant.policeVerificationStatus === 'submitted' ? 'text-amber-700' : 'text-indigo-700'
+                      } />
+                      <span>
+                        {tenant.policeVerificationStatus === 'verified' ? '✓ Verified' :
+                         tenant.policeVerificationStatus === 'submitted' ? 'Submitted to Thana' : 'Police Form'}
+                      </span>
+                    </button>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Security Deposit:</span>
@@ -584,6 +614,33 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
             if (targetTenant) {
               setViewingAgreement(null);
               setSelectedAgreementTenant(targetTenant);
+            }
+          }}
+        />
+      )}
+
+      {/* Police Verification Modal */}
+      {policeVerificationTenant && (
+        <PoliceVerificationModal
+          isOpen={Boolean(policeVerificationTenant)}
+          onClose={() => setPoliceVerificationTenant(null)}
+          tenant={policeVerificationTenant}
+          property={property}
+          profile={profile || {
+            id: '',
+            fullName: ownerName || property.ownerName || 'Property Owner',
+            phone: ownerPhone || '',
+            email: '',
+            avatarUrl: '',
+            upiId: '',
+            role: 'owner',
+            businessName: property.name,
+            isKycVerified: true,
+            city: property.city
+          }}
+          onUpdateStatus={status => {
+            if (onUpdatePoliceVerificationStatus && policeVerificationTenant) {
+              onUpdatePoliceVerificationStatus(policeVerificationTenant.id, status);
             }
           }}
         />

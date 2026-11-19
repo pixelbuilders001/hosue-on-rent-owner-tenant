@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  Edit3
+  Edit3,
+  WalletCards,
+  Radio
 } from 'lucide-react';
 import { Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, Language } from '../../types';
 import { t } from '../../services/i18n';
@@ -191,6 +193,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <span>Edit Property</span>
               </button>
             )}
+            <button
+              onClick={() => onNavigateTab('broadcast')}
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition cursor-pointer"
+              title="Send notice to residents via WhatsApp"
+            >
+              <Radio size={15} className="text-emerald-300 shrink-0" />
+              <span>Broadcast Notice</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('expenses')}
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition cursor-pointer"
+              title="Track operating expenses & net rental profit"
+            >
+              <WalletCards size={15} className="text-emerald-300 shrink-0" />
+              <span>Expenses & Profit</span>
+            </button>
             <button
               onClick={onOpenMeterCalc}
               className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-700/80 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-medium border border-emerald-600/60 shadow-sm transition cursor-pointer"

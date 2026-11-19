@@ -9,10 +9,16 @@ import {
   FileText, 
   Copy, 
   Check, 
-  Send
+  Send,
+  QrCode,
+  Camera,
+  Eye,
+  Trash2,
+  X
 } from 'lucide-react';
 import { Property, RentRecord, Tenant, Room, OwnerProfile, Language, RentAgreement } from '../../types';
 import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
+import { UpiQrModal } from './UpiQrModal';
 
 interface BillingViewProps {
   property: Property;
@@ -66,6 +72,18 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const [calcWifi, setCalcWifi] = useState(property.wifiCost || 150);
   const [calcOther, setCalcOther] = useState(0);
   const [copiedBill, setCopiedBill] = useState(false);
+  const [meterPhoto, setMeterPhoto] = useState<string | null>(null);
+  const [viewingMeterPhoto, setViewingMeterPhoto] = useState<string | null>(null);
+
+  // Dynamic UPI QR Modal State
+  const [qrTarget, setQrTarget] = useState<{
+    tenantName: string;
+    tenantPhone?: string;
+    roomNumber: string;
+    month: string;
+    amount: number;
+    recordId?: string;
+  } | null>(null);
 
   // Quick Pay Modal State
   const [payTarget, setPayTarget] = useState<RentRecord | null>(null);
@@ -143,6 +161,8 @@ export const BillingView: React.FC<BillingViewProps> = ({
       `• मूल किराया (Rent): ₹${calcBaseRent.toLocaleString('en-IN')}\n` +
       `• बिजली रीडिंग: ${prevReading} से ${currReading} = ${consumedUnits} यूनिट × ₹${unitRate} = ₹${electricityTotal.toLocaleString('en-IN')}\n` +
       (calcWifi > 0 ? `• वाई-फाई / मेंटेनेंस: ₹${calcWifi}\n` : '') +
+      (calcOther > 0 ? `• अन्य / मेस: ₹${calcOther}\n` : '') +
+      (meterPhoto ? `• 📸 सब-मीटर फोटो ऑडिट: संलग्न / रिकॉर्ड में सुरक्षित\n` : '') +
       `--------------------------------\n` +
       `★ कुल देय राशि (Total Due): ₹${grandTotal.toLocaleString('en-IN')}\n` +
       `कृपया इस UPI पर भेजें: ${profile.upiId || '9835044219@upi'}\n` +
@@ -310,7 +330,64 @@ export const BillingView: React.FC<BillingViewProps> = ({
               </div>
             </div>
 
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
+            {/* Sub-Meter Photo Audit Proof Capture */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Camera size={14} className="text-emerald-700" />
+                  Sub-Meter Photo Audit Proof (मीटर फोटो ऑडिट)
+                </span>
+                {meterPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => setMeterPhoto(null)}
+                    className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 size={12} /> Remove
+                  </button>
+                )}
+              </div>
+
+              {meterPhoto ? (
+                <div className="relative rounded-xl overflow-hidden border border-emerald-300 h-28 bg-slate-900 flex items-center justify-center group">
+                  <img src={meterPhoto} alt="Meter reading" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setViewingMeterPhoto(meterPhoto)}
+                    className="absolute inset-0 bg-black/50 text-white flex items-center justify-center gap-1.5 opacity-90 hover:opacity-100 transition text-xs font-bold cursor-pointer"
+                  >
+                    <Eye size={14} /> Click to Expand Photo
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 p-3.5 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-white transition text-xs text-slate-600 hover:text-emerald-800">
+                  <Camera size={18} className="text-emerald-600" />
+                  <span className="font-semibold">Snap / Upload Meter Photo Proof</span>
+                  <span className="text-[10px] text-slate-400 block sm:inline">(Prevents billing disputes)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          if (typeof ev.target?.result === 'string') {
+                            setMeterPhoto(ev.target.result);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Total & Action Buttons */}
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="text-xs text-emerald-800 font-semibold">Total Monthly Bill to Tenant</div>
                 <div className="text-xl sm:text-2xl font-black text-emerald-900">
@@ -318,28 +395,83 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => {
+                    const t = propTenants.find(x => x.roomNumber === calcRoomNumber);
+                    setQrTarget({
+                      tenantName: t?.fullName || `Room ${calcRoomNumber} Resident`,
+                      tenantPhone: t?.phone,
+                      roomNumber: calcRoomNumber,
+                      month: currentMonthName,
+                      amount: grandTotal
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                  title="Generate Dynamic UPI QR Code"
+                >
+                  <QrCode size={14} />
+                  <span>Show UPI QR</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={copyToClipboard}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-900 hover:bg-emerald-100 rounded-xl text-xs font-bold border border-emerald-300 shadow-2xs transition"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-900 hover:bg-emerald-100 rounded-xl text-xs font-bold border border-emerald-300 shadow-2xs transition cursor-pointer"
                 >
                   {copiedBill ? <Check size={14} className="text-emerald-700" /> : <Copy size={14} />}
                   <span>{copiedBill ? 'Copied!' : 'Copy Bill'}</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     const t = propTenants.find(x => x.roomNumber === calcRoomNumber);
                     if (t) openWhatsApp(t.phone, generateBillText());
                     else openWhatsApp('', generateBillText());
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
                 >
                   <Share2 size={14} />
-                  <span>Send on WhatsApp</span>
+                  <span>Send WhatsApp</span>
                 </button>
               </div>
             </div>
+
+            {/* Save directly to Khata */}
+            <button
+              type="button"
+              onClick={() => {
+                const t = propTenants.find(x => x.roomNumber === calcRoomNumber);
+                onRecordRentPayment({
+                  tenantId: t?.id || '',
+                  tenantName: t?.fullName || `Room ${calcRoomNumber} Resident`,
+                  propertyId: property.id,
+                  propertyName: property.name,
+                  roomNumber: calcRoomNumber,
+                  month: currentMonthName,
+                  baseRent: calcBaseRent,
+                  prevReading,
+                  currentReading: currReading,
+                  electricityUnits: consumedUnits,
+                  electricityAmount: electricityTotal,
+                  wifiAmount: calcWifi,
+                  foodAmount: 0,
+                  otherAmount: calcOther,
+                  totalAmount: grandTotal,
+                  status: 'pending',
+                  dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`,
+                  meterPhotoUrl: meterPhoto || undefined
+                });
+                alert(`✓ Bill of ₹${grandTotal.toLocaleString('en-IN')} with meter audit recorded in Rent Khata for Room ${calcRoomNumber}!`);
+                setActiveTab('khata');
+              }}
+              className="w-full py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Zap size={14} className="text-amber-400" />
+              <span>Record & Save Bill to Monthly Khata</span>
+            </button>
           </div>
 
           {/* Right Preview: Live WhatsApp Message Simulator */}
@@ -506,9 +638,21 @@ export const BillingView: React.FC<BillingViewProps> = ({
 
                           <td className="py-3 px-4">
                             {record?.electricityUnits ? (
-                              <div>
-                                <span className="font-semibold text-slate-900">₹{record.electricityAmount}</span>
-                                <span className="text-[11px] text-slate-400 block">({record.electricityUnits} units)</span>
+                              <div className="flex items-center gap-1.5">
+                                <div>
+                                  <span className="font-semibold text-slate-900">₹{record.electricityAmount}</span>
+                                  <span className="text-[11px] text-slate-400 block">({record.electricityUnits} units)</span>
+                                </div>
+                                {record.meterPhotoUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewingMeterPhoto(record.meterPhotoUrl!)}
+                                    className="p-1 rounded-md bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition cursor-pointer"
+                                    title="View Sub-Meter Photo Proof"
+                                  >
+                                    <Camera size={13} />
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-400">Standard</span>
@@ -536,6 +680,24 @@ export const BillingView: React.FC<BillingViewProps> = ({
                           </td>
 
                           <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                            {/* Dynamic UPI QR Code Button */}
+                            <button
+                              type="button"
+                              onClick={() => setQrTarget({
+                                tenantName: tenant.fullName || record?.tenantName || 'Resident',
+                                tenantPhone: tenant.phone,
+                                roomNumber: tenant.roomNumber || record?.roomNumber || 'Unit',
+                                month: selectedMonth,
+                                amount: amount,
+                                recordId: record?.id
+                              })}
+                              className="px-2 py-1 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg transition inline-flex items-center gap-1 align-middle cursor-pointer"
+                              title="Scan & Pay via UPI QR"
+                            >
+                              <QrCode size={12} />
+                              <span className="hidden sm:inline">UPI QR</span>
+                            </button>
+
                             {tenantAgreement && (
                               <button
                                 onClick={() => {
@@ -703,6 +865,52 @@ export const BillingView: React.FC<BillingViewProps> = ({
           property={property}
           onClose={() => setViewingAgreement(null)}
         />
+      )}
+
+      {/* Dynamic NPCI UPI QR Modal */}
+      {qrTarget && (
+        <UpiQrModal
+          isOpen={Boolean(qrTarget)}
+          onClose={() => setQrTarget(null)}
+          tenantName={qrTarget.tenantName}
+          tenantPhone={qrTarget.tenantPhone}
+          roomNumber={qrTarget.roomNumber}
+          month={qrTarget.month}
+          amount={qrTarget.amount}
+          defaultUpiId={profile.upiId}
+          ownerName={profile.fullName}
+          propertyName={property.name}
+          onMarkAsPaid={qrTarget.recordId ? (method, ref) => {
+            onUpdatePaymentStatus(qrTarget.recordId!, 'paid', method, ref);
+          } : undefined}
+        />
+      )}
+
+      {/* Sub-Meter Photo Audit Lightbox Modal */}
+      {viewingMeterPhoto && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-4 overflow-hidden relative shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white">
+              <div className="flex items-center gap-2">
+                <Camera size={16} className="text-emerald-400" />
+                <span className="text-xs font-bold">Sub-Meter Reading Audit Photo Proof</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingMeterPhoto(null)}
+                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="mt-3 rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[70vh]">
+              <img src={viewingMeterPhoto} alt="Sub-meter Audit Snapshot" className="max-h-[68vh] w-auto object-contain" />
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400 text-center">
+              Official audit snapshot recorded for this electricity sub-meter calculation.
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

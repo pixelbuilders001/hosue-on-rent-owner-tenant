@@ -1,4 +1,4 @@
-import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, RentAgreement } from '../types';
+import { OwnerProfile, Property, Room, Bed, Tenant, Lead, RentRecord, Complaint, RentAgreement, PropertyExpense } from '../types';
 
 export const STORAGE_KEY = 'roomsaathi_clean_v2';
 
@@ -12,6 +12,7 @@ export interface AppState {
   rentRecords: RentRecord[];
   complaints: Complaint[];
   agreements: RentAgreement[];
+  expenses: PropertyExpense[];
   activePropertyId: string;
 }
 
@@ -39,6 +40,7 @@ export function getCleanInitialState(): AppState {
     rentRecords: [],
     complaints: [],
     agreements: [],
+    expenses: [],
     activePropertyId: ''
   };
 }
@@ -97,7 +99,7 @@ import { supabase } from './supabase';
 export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null> {
   if (!supabase) return null;
   try {
-    const [propsRes, roomsRes, bedsRes, leadsRes, tenantsRes, rentsRes, compRes, agreementsRes] = await Promise.all([
+    const [propsRes, roomsRes, bedsRes, leadsRes, tenantsRes, rentsRes, compRes, agreementsRes, expRes] = await Promise.all([
       supabase.from('properties').select('*').eq('is_active', true),
       supabase.from('rooms').select('*'),
       supabase.from('beds').select('*'),
@@ -105,7 +107,8 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
       supabase.from('tenants').select('*').order('created_at', { ascending: false }),
       supabase.from('rent_records').select('*').order('created_at', { ascending: false }),
       supabase.from('complaints').select('*').order('created_at', { ascending: false }),
-      supabase.from('agreements').select('*').order('created_at', { ascending: false })
+      supabase.from('agreements').select('*').order('created_at', { ascending: false }),
+      supabase.from('property_expenses').select('*').order('created_at', { ascending: false })
     ]);
 
     const partial: Partial<AppState> = {
@@ -240,7 +243,8 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
         dueDate: r.due_date,
         paidDate: r.paid_date,
         paymentMethod: r.payment_method,
-        transactionRef: r.transaction_ref
+        transactionRef: r.transaction_ref,
+        meterPhotoUrl: r.meter_photo_url || r.meterPhotoUrl || undefined
       })),
       ...(() => {
         const complaintsList: any[] = [];
@@ -315,7 +319,19 @@ export async function fetchLiveSupabaseData(): Promise<Partial<AppState> | null>
           complaints: complaintsList,
           agreements: agreementsList
         };
-      })()
+      })(),
+      expenses: (expRes?.data || []).map((e: any) => ({
+        id: e.id,
+        propertyId: e.property_id,
+        title: e.title,
+        category: e.category,
+        amount: Number(e.amount) || 0,
+        date: e.date,
+        paidTo: e.paid_to || undefined,
+        notes: e.notes || undefined,
+        receiptPhoto: e.receipt_photo || undefined,
+        createdAt: e.created_at || new Date().toISOString()
+      }))
     };
 
     return partial;
@@ -870,6 +886,34 @@ export async function syncAgreementUpdateToSupabase(
     await supabase.from('agreements').update(payload).eq('id', agreementId);
   } catch (e) {
     console.warn('Agreement update saved locally (Supabase cloud sync fallback)', e);
+  }
+}
+
+export async function syncExpenseToSupabase(expense: PropertyExpense) {
+  if (!supabase) return;
+  try {
+    await supabase.from('property_expenses').insert({
+      id: expense.id,
+      property_id: expense.propertyId,
+      title: expense.title,
+      category: expense.category,
+      amount: Number(expense.amount) || 0,
+      date: expense.date,
+      paid_to: expense.paidTo || null,
+      notes: expense.notes || null,
+      receipt_photo: expense.receiptPhoto || null
+    });
+  } catch (e) {
+    console.warn('Expense saved locally (Supabase cloud sync fallback)', e);
+  }
+}
+
+export async function syncDeleteExpenseFromSupabase(expenseId: string) {
+  if (!supabase) return;
+  try {
+    await supabase.from('property_expenses').delete().eq('id', expenseId);
+  } catch (e) {
+    console.warn('Expense deletion saved locally (Supabase cloud sync fallback)', e);
   }
 }
 

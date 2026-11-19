@@ -6,7 +6,9 @@ import {
   UsersRound, 
   ReceiptIndianRupee, 
   Wrench, 
-  Settings
+  Settings,
+  WalletCards,
+  Radio
 } from 'lucide-react';
 import { Language } from '../../types';
 import { t } from '../../services/i18n';
@@ -17,6 +19,8 @@ export type TabType =
   | 'leads' 
   | 'tenants' 
   | 'billing' 
+  | 'expenses'
+  | 'broadcast'
   | 'complaints' 
   | 'settings';
 
@@ -67,6 +71,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: t(language, 'billing'),
       icon: ReceiptIndianRupee,
       badge: dueRentsCount
+    },
+    {
+      id: 'expenses' as TabType,
+      label: t(language, 'expenses'),
+      icon: WalletCards,
+      badge: 0
+    },
+    {
+      id: 'broadcast' as TabType,
+      label: t(language, 'broadcast'),
+      icon: Radio,
+      badge: 0
     },
     {
       id: 'complaints' as TabType,

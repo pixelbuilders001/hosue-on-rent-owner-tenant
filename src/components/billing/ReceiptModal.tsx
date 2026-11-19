@@ -118,6 +118,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </div>
           </div>
 
+          {record.meterPhotoUrl && (
+            <div className="p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-1.5 text-emerald-900 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Meter Photo Audit Proof Attached</span>
+              </div>
+              <a
+                href={record.meterPhotoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold text-emerald-800 hover:text-emerald-900 underline"
+              >
+                View Photo ↗
+              </a>
+            </div>
+          )}
+
           <div className="pt-2 text-[10px] text-slate-400 flex items-center justify-between border-t border-slate-100">
             <span>Method: {record.paymentMethod || 'UPI'} {record.transactionRef && `(${record.transactionRef})`}</span>
             <span>Authorized by {profile.fullName}</span>
