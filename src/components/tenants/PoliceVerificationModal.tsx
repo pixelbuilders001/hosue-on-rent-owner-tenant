@@ -10,7 +10,8 @@ import {
   Building,
   User,
   MapPin,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { Tenant, Property, OwnerProfile } from '../../types';
 import { generatePoliceVerificationPdf } from '../../services/pdfPoliceVerificationService';
@@ -263,10 +264,19 @@ export const PoliceVerificationModal: React.FC<PoliceVerificationModalProps> = (
             <button
               onClick={handleDownloadPdf}
               disabled={isGenerating}
-              className="flex-1 py-3 px-4 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-700/20"
+              className={`flex-1 py-3 px-4 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-700/20 ${isGenerating ? 'opacity-75 cursor-not-allowed' : ''}`}
             >
-              <Download size={16} />
-              <span>{isGenerating ? 'Generating Official PDF...' : 'Download Official Police PDF'}</span>
+              {isGenerating ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Generating Official PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  <span>Download Official Police PDF</span>
+                </>
+              )}
             </button>
 
             <button

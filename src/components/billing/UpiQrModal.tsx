@@ -8,7 +8,8 @@ import {
   Share2, 
   CheckCircle2, 
   ShieldCheck,
-  Edit2
+  Edit2,
+  Loader2
 } from 'lucide-react';
 
 interface UpiQrModalProps {
@@ -44,6 +45,7 @@ export const UpiQrModal: React.FC<UpiQrModalProps> = ({
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [transactionRef, setTransactionRef] = useState('');
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
@@ -117,11 +119,16 @@ export const UpiQrModal: React.FC<UpiQrModalProps> = ({
     window.open(url, '_blank');
   };
 
-  const handleConfirmPaid = () => {
+  const handleConfirmPaid = async () => {
     if (!onMarkAsPaid) return;
-    const ref = transactionRef.trim() || `UPI-${Date.now().toString().slice(-6)}`;
-    onMarkAsPaid('UPI', ref);
-    onClose();
+    setIsConfirming(true);
+    try {
+      const ref = transactionRef.trim() || `UPI-${Date.now().toString().slice(-6)}`;
+      await Promise.resolve(onMarkAsPaid('UPI', ref));
+      onClose();
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   return (
@@ -283,12 +290,21 @@ export const UpiQrModal: React.FC<UpiQrModalProps> = ({
                   <div className="flex gap-2">
                     <button
                       onClick={handleConfirmPaid}
-                      className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg cursor-pointer"
+                      disabled={isConfirming}
+                      className={`flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1.5 ${isConfirming ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                      Confirm Paid
+                      {isConfirming ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>Confirming Paid...</span>
+                        </>
+                      ) : (
+                        <span>Confirm Paid</span>
+                      )}
                     </button>
                     <button
                       onClick={() => setIsMarkingPaid(false)}
+                      disabled={isConfirming}
                       className="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg cursor-pointer"
                     >
                       Cancel

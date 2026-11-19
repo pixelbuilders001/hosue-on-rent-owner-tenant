@@ -14,6 +14,7 @@ import { Property, Tenant, Room, Bed, Language, RentAgreement, OwnerProfile } fr
 import { RentAgreementModal } from '../agreements/RentAgreementModal';
 import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
 import { PoliceVerificationModal } from './PoliceVerificationModal';
+import { Button } from '../common/Button';
 
 interface TenantsViewProps {
   property: Property;
@@ -53,6 +54,8 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [vacateTarget, setVacateTarget] = useState<Tenant | null>(null);
   const [deductions, setDeductions] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVacating, setIsVacating] = useState(false);
 
   // New Tenant Form
   const [fullName, setFullName] = useState('');
@@ -88,45 +91,55 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
     window.open(url, '_blank');
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !phone || !selectedBedId) return;
 
-    const chosenBed = beds.find(b => b.id === selectedBedId);
-    const chosenRoom = rooms.find(r => r.id === chosenBed?.roomId);
+    setIsSubmitting(true);
+    try {
+      const chosenBed = beds.find(b => b.id === selectedBedId);
+      const chosenRoom = rooms.find(r => r.id === chosenBed?.roomId);
 
-    onAddTenant({
-      propertyId: property.id,
-      roomId: chosenRoom?.id || '',
-      bedId: chosenBed?.id,
-      roomNumber: chosenRoom?.roomNumber || '101',
-      bedLabel: chosenBed?.bedLabel || 'Bed A',
-      fullName,
-      phone,
-      emergencyPhone,
-      collegeOrWork,
-      idProofType,
-      idProofNumber,
-      checkInDate: new Date().toISOString().split('T')[0],
-      monthlyRent: Number(monthlyRent),
-      depositPaid: Number(depositPaid),
-      status: 'active',
-      policeVerificationStatus: 'submitted'
-    });
+      await Promise.resolve(onAddTenant({
+        propertyId: property.id,
+        roomId: chosenRoom?.id || '',
+        bedId: chosenBed?.id,
+        roomNumber: chosenRoom?.roomNumber || '101',
+        bedLabel: chosenBed?.bedLabel || 'Bed A',
+        fullName,
+        phone,
+        emergencyPhone,
+        collegeOrWork,
+        idProofType,
+        idProofNumber,
+        checkInDate: new Date().toISOString().split('T')[0],
+        monthlyRent: Number(monthlyRent),
+        depositPaid: Number(depositPaid),
+        status: 'active',
+        policeVerificationStatus: 'submitted'
+      }));
 
-    setFullName('');
-    setPhone('');
-    setEmergencyPhone('');
-    setCollegeOrWork('');
-    setIdProofNumber('');
-    setShowAddTenantModal(false);
+      setFullName('');
+      setPhone('');
+      setEmergencyPhone('');
+      setCollegeOrWork('');
+      setIdProofNumber('');
+      setShowAddTenantModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleVacateConfirm = () => {
+  const handleVacateConfirm = async () => {
     if (!vacateTarget) return;
-    const finalRefund = Math.max(0, (vacateTarget.depositPaid || 0) - deductions);
-    onVacateTenant(vacateTarget.id, vacateTarget.bedId, finalRefund);
-    setVacateTarget(null);
+    setIsVacating(true);
+    try {
+      const finalRefund = Math.max(0, (vacateTarget.depositPaid || 0) - deductions);
+      await Promise.resolve(onVacateTenant(vacateTarget.id, vacateTarget.bedId, finalRefund));
+      setVacateTarget(null);
+    } finally {
+      setIsVacating(false);
+    }
   };
 
   return (
@@ -404,17 +417,20 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setVacateTarget(null)}
+                  disabled={isVacating}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
+                <Button
+                  variant="danger"
+                  size="sm"
+                  isLoading={isVacating}
+                  loadingText="Freeing Bed & Updating..."
                   onClick={handleVacateConfirm}
-                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs"
                 >
                   Confirm Check-out & Free Bed
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -559,17 +575,21 @@ export const TenantsView: React.FC<TenantsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddTenantModal(false)}
+                  disabled={isSubmitting}
                   className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isSubmitting}
+                  loadingText="Checking in Resident..."
                   disabled={availableBeds.length === 0}
-                  className="px-4 py-2 font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl shadow-xs"
                 >
                   Save & Check-in Tenant
-                </button>
+                </Button>
               </div>
             </form>
           </div>

@@ -14,6 +14,7 @@ import { AddPropertyModal } from './components/common/AddPropertyModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { ReceiptModal } from './components/billing/ReceiptModal';
 import { TenantSignAgreementView } from './components/agreements/TenantSignAgreementView';
+import { TabSkeleton } from './components/common/Skeleton';
 
 import { Building2, Plus, Lock } from 'lucide-react';
 import { 
@@ -59,7 +60,19 @@ import {
 export function App() {
   const [state, setState] = useState<AppState>(getInitialState);
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
+  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
+  const [pendingTab, setPendingTab] = useState<TabType>('dashboard');
   const [language, setLanguage] = useState<Language>('en');
+
+  const handleTabSwitch = (newTab: TabType) => {
+    if (newTab === currentTab && !isTabTransitioning) return;
+    setIsTabTransitioning(true);
+    setPendingTab(newTab);
+    setTimeout(() => {
+      setCurrentTab(newTab);
+      setIsTabTransitioning(false);
+    }, 180);
+  };
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -944,7 +957,14 @@ export function App() {
         profile={state.profile}
         properties={displayProperties}
         activePropertyId={state.activePropertyId}
-        onSelectProperty={id => setState(p => ({ ...p, activePropertyId: id }))}
+        onSelectProperty={id => {
+          if (id === state.activePropertyId) return;
+          setIsTabTransitioning(true);
+          setState(p => ({ ...p, activePropertyId: id }));
+          setTimeout(() => {
+            setIsTabTransitioning(false);
+          }, 180);
+        }}
         onOpenAddProperty={handleOpenAddProperty}
         language={language}
         onToggleLanguage={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
@@ -965,7 +985,7 @@ export function App() {
               setShowAuthModal(true);
               return;
             }
-            setCurrentTab(tab);
+            handleTabSwitch(tab);
           }}
           language={language}
           leadsCount={leadsCount}
@@ -976,7 +996,9 @@ export function App() {
         {/* Tab View Container */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto min-w-0 w-full">
           
-          {!isAuthenticated ? (
+          {isTabTransitioning ? (
+            <TabSkeleton tab={pendingTab} />
+          ) : !isAuthenticated ? (
             <div className="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
               <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Building2 size={32} />
@@ -1034,10 +1056,10 @@ export function App() {
                   rentRecords={state.rentRecords}
                   complaints={state.complaints}
                   language={language}
-                  onNavigateTab={setCurrentTab}
+                  onNavigateTab={handleTabSwitch}
                   onToggleBedStatus={handleToggleBedStatus}
-                  onOpenQuickRent={() => setCurrentTab('billing')}
-                  onOpenMeterCalc={() => setCurrentTab('billing')}
+                  onOpenQuickRent={() => handleTabSwitch('billing')}
+                  onOpenMeterCalc={() => handleTabSwitch('billing')}
                   onOpenAddProperty={handleOpenAddProperty}
                   onTogglePropertyStatus={handleTogglePropertyStatus}
                   onEditProperty={(prop) => setEditingProperty(prop)}

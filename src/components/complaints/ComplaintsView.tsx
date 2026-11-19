@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Property, Complaint, Language } from '../../types';
 import { t } from '../../services/i18n';
+import { Button } from '../common/Button';
 
 interface ComplaintsViewProps {
   property: Property;
@@ -31,8 +32,9 @@ export const ComplaintsView: React.FC<ComplaintsViewProps> = ({
   const [resolveTarget, setResolveTarget] = useState<Complaint | null>(null);
   const [adminNote, setAdminNote] = useState('');
 
-  // Add Complaint Modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [roomNumber, setRoomNumber] = useState('101');
   const [tenantName, setTenantName] = useState('');
   const [category, setCategory] = useState<Complaint['category']>('Plumbing');
@@ -45,34 +47,44 @@ export const ComplaintsView: React.FC<ComplaintsViewProps> = ({
     ? propComplaints
     : propComplaints.filter(c => c.status === filterStatus);
 
-  const handleResolveSubmit = (e: React.FormEvent) => {
+  const handleResolveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resolveTarget) return;
 
-    onUpdateComplaintStatus(resolveTarget.id, 'resolved', adminNote);
-    setResolveTarget(null);
-    setAdminNote('');
+    setIsResolving(true);
+    try {
+      await Promise.resolve(onUpdateComplaintStatus(resolveTarget.id, 'resolved', adminNote));
+      setResolveTarget(null);
+      setAdminNote('');
+    } finally {
+      setIsResolving(false);
+    }
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !roomNumber) return;
 
-    onAddComplaint({
-      propertyId: property.id,
-      propertyName: property.name,
-      roomNumber,
-      tenantName: tenantName || `Room ${roomNumber} Resident`,
-      category,
-      title,
-      description,
-      priority,
-      status: 'open'
-    });
+    setIsSubmitting(true);
+    try {
+      await Promise.resolve(onAddComplaint({
+        propertyId: property.id,
+        propertyName: property.name,
+        roomNumber,
+        tenantName: tenantName || `Room ${roomNumber} Resident`,
+        category,
+        title,
+        description,
+        priority,
+        status: 'open'
+      }));
 
-    setTitle('');
-    setDescription('');
-    setShowAddModal(false);
+      setTitle('');
+      setDescription('');
+      setShowAddModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -237,16 +249,20 @@ export const ComplaintsView: React.FC<ComplaintsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setResolveTarget(null)}
+                  disabled={isResolving}
                   className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isResolving}
+                  loadingText="Resolving Issue..."
                 >
                   Mark as Resolved
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -321,16 +337,20 @@ export const ComplaintsView: React.FC<ComplaintsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
+                  disabled={isSubmitting}
                   className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isSubmitting}
+                  loadingText="Creating Ticket..."
                 >
                   Create Ticket
-                </button>
+                </Button>
               </div>
             </form>
           </div>

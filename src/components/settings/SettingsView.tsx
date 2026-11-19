@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { OwnerProfile, Language } from '../../types';
 import { hasSupabase } from '../../services/supabase';
+import { Button } from '../common/Button';
 
 interface SettingsViewProps {
   profile: OwnerProfile;
@@ -33,6 +34,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [upiId, setUpiId] = useState(profile.upiId);
   const [city, setCity] = useState(profile.city);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   React.useEffect(() => {
     setFullName(profile.fullName || '');
@@ -43,19 +45,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setCity(profile.city || '');
   }, [profile]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile({
-      ...profile,
-      fullName,
-      phone,
-      email,
-      businessName,
-      upiId,
-      city
-    });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setIsSaving(true);
+    try {
+      await Promise.resolve(onUpdateProfile({
+        ...profile,
+        fullName,
+        phone,
+        email,
+        businessName,
+        upiId,
+        city
+      }));
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const isSupabaseActive = hasSupabase();
@@ -200,19 +207,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* Submit Bar */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          {savedSuccess && (
+          {savedSuccess && !isSaving && (
             <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
               <Check size={14} /> Settings Saved Successfully!
             </span>
           )}
 
-          <button
+          <Button
             type="submit"
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition"
+            variant="primary"
+            size="md"
+            isLoading={isSaving}
+            loadingText="Saving Profile..."
+            icon={savedSuccess ? <Check size={15} /> : <Save size={15} />}
           >
-            <Save size={15} />
-            <span>Save Profile</span>
-          </button>
+            {savedSuccess ? 'Saved Successfully!' : 'Save Profile'}
+          </Button>
         </div>
 
       </form>

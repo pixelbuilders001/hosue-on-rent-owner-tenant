@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Property, Room, Bed, Language } from '../../types';
 import { t } from '../../services/i18n';
+import { Button } from '../common/Button';
 
 interface RoomsBedsViewProps {
   property: Property;
@@ -53,21 +54,28 @@ export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
   const [newFloor, setNewFloor] = useState(1);
   const [newRoomType, setNewRoomType] = useState<'Single' | '2 Sharing' | '3 Sharing' | '4 Sharing'>('2 Sharing');
   const [newRent, setNewRent] = useState(4000);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomNumber) return;
-    const bedCount = newRoomType === 'Single' ? 1 : newRoomType === '2 Sharing' ? 2 : newRoomType === '3 Sharing' ? 3 : 4;
-    onAddRoom({
-      propertyId: property.id,
-      roomNumber: newRoomNumber,
-      floor: Number(newFloor),
-      roomType: newRoomType,
-      totalBeds: bedCount,
-      baseRent: Number(newRent)
-    }, bedCount);
-    setNewRoomNumber('');
-    setShowAddRoomModal(false);
+    setIsCreatingRoom(true);
+    try {
+      const bedCount = newRoomType === 'Single' ? 1 : newRoomType === '2 Sharing' ? 2 : newRoomType === '3 Sharing' ? 3 : 4;
+      await Promise.resolve(onAddRoom({
+        propertyId: property.id,
+        roomNumber: newRoomNumber,
+        floor: Number(newFloor),
+        roomType: newRoomType,
+        totalBeds: bedCount,
+        baseRent: Number(newRent)
+      }, bedCount));
+      setNewRoomNumber('');
+      setShowAddRoomModal(false);
+    } finally {
+      setIsCreatingRoom(false);
+    }
   };
 
   // Unique floors
@@ -329,16 +337,20 @@ export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddRoomModal(false)}
+                  disabled={isCreatingRoom}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs transition"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isCreatingRoom}
+                  loadingText="Creating Room & Beds..."
                 >
                   Create Room & Beds
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -420,13 +432,33 @@ export const RoomsBedsView: React.FC<RoomsBedsViewProps> = ({
                 )}
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
                 <button
+                  type="button"
                   onClick={() => setShowEditPricingModal(false)}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold transition"
+                  disabled={isSavingPricing}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Cancel
+                </button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isSavingPricing}
+                  loadingText="Saving Settings..."
+                  onClick={async () => {
+                    setIsSavingPricing(true);
+                    try {
+                      await Promise.resolve(onUpdateProperty(property));
+                      setShowEditPricingModal(false);
+                    } finally {
+                      setIsSavingPricing(false);
+                    }
+                  }}
                 >
                   Save Settings
-                </button>
+                </Button>
               </div>
             </div>
           </div>

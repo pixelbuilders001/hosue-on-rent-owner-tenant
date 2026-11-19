@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Property, Lead, Bed, Room, Language } from '../../types';
 import { t } from '../../services/i18n';
+import { Button } from '../common/Button';
 
 interface LeadsViewProps {
   property: Property;
@@ -49,6 +50,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const [tenantDeposit, setTenantDeposit] = useState(4000);
 
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [isAddingLead, setIsAddingLead] = useState(false);
   const [newRenterName, setNewRenterName] = useState('');
   const [newRenterPhone, setNewRenterPhone] = useState('');
   const [newBudget, setNewBudget] = useState(4000);
@@ -68,56 +72,71 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     window.open(url, '_blank');
   };
 
-  const handleScheduleVisit = (e: React.FormEvent) => {
+  const handleScheduleVisit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLeadForVisit) return;
 
-    onUpdateLeadStatus(selectedLeadForVisit.id, 'visit_scheduled', {
-      visitDate,
-      visitTime
-    });
+    setIsScheduling(true);
+    try {
+      await Promise.resolve(onUpdateLeadStatus(selectedLeadForVisit.id, 'visit_scheduled', {
+        visitDate,
+        visitTime
+      }));
 
-    const message = `नमस्ते ${selectedLeadForVisit.renterName} जी, ${property.name} पर आपकी विज़िट ${visitDate} को ${visitTime} बजे तय हो गई है।\nलोकेशन: ${property.address} (${property.landmark})\nकोई भी समस्या हो तो कृपया कॉल करें।`;
-    openWhatsApp(selectedLeadForVisit.renterPhone, message);
+      const message = `नमस्ते ${selectedLeadForVisit.renterName} जी, ${property.name} पर आपकी विज़िट ${visitDate} को ${visitTime} बजे तय हो गई है।\nलोकेशन: ${property.address} (${property.landmark})\nकोई भी समस्या हो तो कृपया कॉल करें।`;
+      openWhatsApp(selectedLeadForVisit.renterPhone, message);
 
-    setSelectedLeadForVisit(null);
+      setSelectedLeadForVisit(null);
+    } finally {
+      setIsScheduling(false);
+    }
   };
 
-  const handleConvertSubmit = (e: React.FormEvent) => {
+  const handleConvertSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!convertLead || !selectedRoomId || !selectedBedId) return;
 
-    onConvertLeadToTenant(
-      convertLead,
-      selectedRoomId,
-      selectedBedId,
-      Number(tenantRent),
-      Number(tenantDeposit)
-    );
+    setIsConverting(true);
+    try {
+      await Promise.resolve(onConvertLeadToTenant(
+        convertLead,
+        selectedRoomId,
+        selectedBedId,
+        Number(tenantRent),
+        Number(tenantDeposit)
+      ));
 
-    setConvertLead(null);
+      setConvertLead(null);
+    } finally {
+      setIsConverting(false);
+    }
   };
 
-  const handleManualLeadSubmit = (e: React.FormEvent) => {
+  const handleManualLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRenterName || !newRenterPhone) return;
 
-    onAddNewLead({
-      propertyId: property.id,
-      propertyName: property.name,
-      renterName: newRenterName,
-      renterPhone: newRenterPhone,
-      budget: Number(newBudget),
-      lookingFor: newLookingFor,
-      destination: property.area,
-      status: 'new',
-      notes: newNotes
-    });
+    setIsAddingLead(true);
+    try {
+      await Promise.resolve(onAddNewLead({
+        propertyId: property.id,
+        propertyName: property.name,
+        renterName: newRenterName,
+        renterPhone: newRenterPhone,
+        budget: Number(newBudget),
+        lookingFor: newLookingFor,
+        destination: property.area,
+        status: 'new',
+        notes: newNotes
+      }));
 
-    setNewRenterName('');
-    setNewRenterPhone('');
-    setNewNotes('');
-    setShowAddLeadModal(false);
+      setNewRenterName('');
+      setNewRenterPhone('');
+      setNewNotes('');
+      setShowAddLeadModal(false);
+    } finally {
+      setIsAddingLead(false);
+    }
   };
 
   return (
@@ -315,16 +334,20 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedLeadForVisit(null)}
+                  disabled={isScheduling}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isScheduling}
+                  loadingText="Scheduling Visit..."
                 >
                   Confirm & Send on WhatsApp
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -404,17 +427,21 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setConvertLead(null)}
+                  disabled={isConverting}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isConverting}
+                  loadingText="Onboarding Resident..."
                   disabled={availableBeds.length === 0}
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl shadow-xs"
                 >
                   Complete Onboarding
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -496,16 +523,20 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddLeadModal(false)}
+                  disabled={isAddingLead}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isAddingLead}
+                  loadingText="Saving Inquiry..."
                 >
                   Save Inquiry
-                </button>
+                </Button>
               </div>
             </form>
           </div>

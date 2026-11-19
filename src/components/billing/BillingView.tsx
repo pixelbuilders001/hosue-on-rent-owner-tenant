@@ -19,6 +19,7 @@ import {
 import { Property, RentRecord, Tenant, Room, OwnerProfile, Language, RentAgreement } from '../../types';
 import { AgreementViewerModal } from '../agreements/AgreementViewerModal';
 import { UpiQrModal } from './UpiQrModal';
+import { Button } from '../common/Button';
 
 interface BillingViewProps {
   property: Property;
@@ -89,6 +90,8 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const [payTarget, setPayTarget] = useState<RentRecord | null>(null);
   const [payMethod, setPayMethod] = useState<RentRecord['paymentMethod']>('UPI');
   const [transactionRef, setTransactionRef] = useState('');
+  const [isRecordingKhata, setIsRecordingKhata] = useState(false);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
 
   // 1. All active tenants in this property
   const propTenants = tenants.filter(t => t.propertyId === property.id && t.status !== 'vacated');
@@ -181,13 +184,18 @@ export const BillingView: React.FC<BillingViewProps> = ({
     setTimeout(() => setCopiedBill(false), 2500);
   };
 
-  const handlePayConfirm = (e: React.FormEvent) => {
+  const handlePayConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payTarget) return;
 
-    onUpdatePaymentStatus(payTarget.id, 'paid', payMethod, transactionRef || 'DIRECT-VERIFIED');
-    setPayTarget(null);
-    setTransactionRef('');
+    setIsConfirmingPayment(true);
+    try {
+      await Promise.resolve(onUpdatePaymentStatus(payTarget.id, 'paid', payMethod, transactionRef || 'DIRECT-VERIFIED'));
+      setPayTarget(null);
+      setTransactionRef('');
+    } finally {
+      setIsConfirmingPayment(false);
+    }
   };
 
   return (
@@ -440,38 +448,46 @@ export const BillingView: React.FC<BillingViewProps> = ({
             </div>
 
             {/* Save directly to Khata */}
-            <button
+            <Button
               type="button"
-              onClick={() => {
-                const t = propTenants.find(x => x.roomNumber === calcRoomNumber);
-                onRecordRentPayment({
-                  tenantId: t?.id || '',
-                  tenantName: t?.fullName || `Room ${calcRoomNumber} Resident`,
-                  propertyId: property.id,
-                  propertyName: property.name,
-                  roomNumber: calcRoomNumber,
-                  month: currentMonthName,
-                  baseRent: calcBaseRent,
-                  prevReading,
-                  currentReading: currReading,
-                  electricityUnits: consumedUnits,
-                  electricityAmount: electricityTotal,
-                  wifiAmount: calcWifi,
-                  foodAmount: 0,
-                  otherAmount: calcOther,
-                  totalAmount: grandTotal,
-                  status: 'pending',
-                  dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`,
-                  meterPhotoUrl: meterPhoto || undefined
-                });
-                alert(`✓ Bill of ₹${grandTotal.toLocaleString('en-IN')} with meter audit recorded in Rent Khata for Room ${calcRoomNumber}!`);
-                setActiveTab('khata');
+              variant="dark"
+              size="md"
+              fullWidth
+              isLoading={isRecordingKhata}
+              loadingText="Recording Bill into Monthly Khata..."
+              icon={<Zap size={14} className="text-amber-400" />}
+              onClick={async () => {
+                setIsRecordingKhata(true);
+                try {
+                  const t = propTenants.find(x => x.roomNumber === calcRoomNumber);
+                  await Promise.resolve(onRecordRentPayment({
+                    tenantId: t?.id || '',
+                    tenantName: t?.fullName || `Room ${calcRoomNumber} Resident`,
+                    propertyId: property.id,
+                    propertyName: property.name,
+                    roomNumber: calcRoomNumber,
+                    month: currentMonthName,
+                    baseRent: calcBaseRent,
+                    prevReading,
+                    currentReading: currReading,
+                    electricityUnits: consumedUnits,
+                    electricityAmount: electricityTotal,
+                    wifiAmount: calcWifi,
+                    foodAmount: 0,
+                    otherAmount: calcOther,
+                    totalAmount: grandTotal,
+                    status: 'pending',
+                    dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-05`,
+                    meterPhotoUrl: meterPhoto || undefined
+                  }));
+                  setActiveTab('khata');
+                } finally {
+                  setIsRecordingKhata(false);
+                }
               }}
-              className="w-full py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
             >
-              <Zap size={14} className="text-amber-400" />
-              <span>Record & Save Bill to Monthly Khata</span>
-            </button>
+              Record & Save Bill to Monthly Khata
+            </Button>
           </div>
 
           {/* Right Preview: Live WhatsApp Message Simulator */}
@@ -841,16 +857,20 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setPayTarget(null)}
+                  disabled={isConfirmingPayment}
                   className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-4 py-2 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-xs"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isConfirmingPayment}
+                  loadingText="Confirming Payment..."
                 >
                   Confirm Payment & Generate Receipt
-                </button>
+                </Button>
               </div>
             </form>
           </div>

@@ -24,6 +24,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Property, RentRecord, PropertyExpense, ExpenseCategory, Language } from '../../types';
+import { Button } from '../common/Button';
 
 interface ExpensesViewProps {
   property: Property;
@@ -58,6 +59,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New Expense Form State
   const [title, setTitle] = useState('');
@@ -117,27 +119,32 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
   });
 
-  const handleCreateExpense = (e: React.FormEvent) => {
+  const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !amount || Number(amount) <= 0) return;
 
-    onAddExpense({
-      propertyId: property.id,
-      title,
-      category,
-      amount: Number(amount),
-      date,
-      paidTo: paidTo.trim() || undefined,
-      notes: notes.trim() || undefined,
-      receiptPhoto: receiptPhoto || undefined
-    });
+    setIsSubmitting(true);
+    try {
+      await Promise.resolve(onAddExpense({
+        propertyId: property.id,
+        title,
+        category,
+        amount: Number(amount),
+        date,
+        paidTo: paidTo.trim() || undefined,
+        notes: notes.trim() || undefined,
+        receiptPhoto: receiptPhoto || undefined
+      }));
 
-    setTitle('');
-    setAmount('');
-    setPaidTo('');
-    setNotes('');
-    setReceiptPhoto(null);
-    setShowAddModal(false);
+      setTitle('');
+      setAmount('');
+      setPaidTo('');
+      setNotes('');
+      setReceiptPhoto(null);
+      setShowAddModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePrintPnl = () => {
@@ -533,16 +540,20 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
+                  disabled={isSubmitting}
                   className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                  variant="emerald"
+                  size="sm"
+                  isLoading={isSubmitting}
+                  loadingText="Saving Voucher..."
                 >
                   Save Expense Voucher
-                </button>
+                </Button>
               </div>
 
             </form>
