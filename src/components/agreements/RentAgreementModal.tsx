@@ -11,13 +11,12 @@ import {
   AlertCircle, 
   Copy, 
   Check, 
-  Sparkles,
   ExternalLink,
   RotateCw
 } from 'lucide-react';
 import { Property, Tenant, RentAgreement } from '../../types';
 import { SignaturePadModal } from './SignaturePadModal';
-import { generateStandardAgreementPdf, embedSignaturesIntoPdf } from '../../services/pdfAgreementService';
+import { embedSignaturesIntoPdf } from '../../services/pdfAgreementService';
 import { generateUUID, fetchLiveSupabaseData } from '../../services/store';
 
 interface RentAgreementModalProps {
@@ -71,7 +70,6 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
   });
   const [showSignPad, setShowSignPad] = useState(false);
   const [showTenantSignPad, setShowTenantSignPad] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -119,27 +117,6 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
   }, [agreement.id, agreement.signingToken, isCompleted, isOpen, tenant.phone, tenant.fullName, onSaveAgreement]);
 
   if (!isOpen) return null;
-
-  // Generate Standard 11-Month Lease
-  const handleGenerateStandardLease = async () => {
-    setIsGenerating(true);
-    try {
-      const generatedDataUri = await generateStandardAgreementPdf(agreement);
-      const updated: RentAgreement = {
-        ...agreement,
-        pdfBase64: generatedDataUri,
-        pdfFileName: `Rental_Agreement_${tenant.fullName.replace(/\s+/g, '_')}.pdf`,
-        status: agreement.ownerSignature ? 'pending_tenant' : 'pending_owner'
-      };
-      setAgreement(updated);
-      onSaveAgreement(updated);
-      setActiveTab('preview');
-    } catch (e) {
-      console.error('Failed to generate lease agreement', e);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   // Upload Custom PDF
   const handlePdfFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -430,58 +407,38 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                   </div>
                 ) : null}
 
-                {/* Option Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  {/* Option 1: 1-Click Standard Agreement */}
-                  <div className="bg-slate-50 hover:bg-emerald-50/50 border-2 border-slate-200 hover:border-emerald-500 rounded-2xl p-5 transition flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                        <Sparkles size={18} />
+                {/* Upload Custom Agreement PDF */}
+                <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-2xl p-6 transition">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 shadow-xs">
+                        <Upload size={24} />
                       </div>
-                      <h4 className="font-bold text-slate-900 text-sm">
-                        Option 1: 1-Click Standard 11-Month Lease
-                      </h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        Instantly generates an official bilingual 11-month residential tenancy agreement formatted for Indian tenancy laws with rent, deposit, notice period, and sub-meter clauses.
-                      </p>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                          <span>Upload Custom PDF Agreement</span>
+                          {currentPdfUrl && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                              <CheckCircle2 size={12} /> PDF Uploaded
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
+                          Upload your scanned ₹100/₹500 stamp paper lease agreement or lawyer-drafted rent agreement (PDF up to 10MB). Both Landlord and Tenant can sign digitally.
+                        </p>
+                        {agreement.pdfFileName && (
+                          <div className="mt-2 text-xs font-medium text-slate-700 flex items-center gap-1.5 bg-white/80 border border-slate-200 px-3 py-1.5 rounded-xl w-fit">
+                            <FileText size={14} className="text-blue-600" />
+                            <span className="font-semibold text-slate-900">{agreement.pdfFileName}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleGenerateStandardLease}
-                      disabled={isGenerating}
-                      className="mt-4 w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {isGenerating ? (
-                        <span>Generating Agreement...</span>
-                      ) : (
-                        <>
-                          <Sparkles size={14} />
-                          <span>Generate Standard Agreement</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Option 2: Upload Custom Agreement PDF */}
-                  <div className="bg-slate-50 hover:bg-blue-50/50 border-2 border-slate-200 hover:border-blue-500 rounded-2xl p-5 transition flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center">
-                        <Upload size={18} />
-                      </div>
-                      <h4 className="font-bold text-slate-900 text-sm">
-                        Option 2: Upload Custom PDF Agreement
-                      </h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        Already have a scanned ₹100 stamp paper agreement or lawyer-drafted lease? Upload the PDF here to sign and collect the tenant's signature digitally.
-                      </p>
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="w-full py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl shadow-2xs transition flex items-center justify-center gap-2 cursor-pointer">
-                        <Upload size={14} />
-                        <span>Select PDF Document</span>
+                    <div className="w-full sm:w-auto shrink-0">
+                      <label className="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                        <Upload size={16} />
+                        <span>{currentPdfUrl ? 'Replace PDF File' : 'Select PDF Document'}</span>
                         <input
                           type="file"
                           accept="application/pdf"
@@ -490,11 +447,10 @@ export const RentAgreementModal: React.FC<RentAgreementModalProps> = ({
                         />
                       </label>
                       {uploadError && (
-                        <p className="text-[11px] text-rose-600 mt-1">{uploadError}</p>
+                        <p className="text-[11px] text-rose-600 mt-1.5 text-center sm:text-right">{uploadError}</p>
                       )}
                     </div>
                   </div>
-
                 </div>
 
                 {/* Agreement Terms Review & Edit */}
