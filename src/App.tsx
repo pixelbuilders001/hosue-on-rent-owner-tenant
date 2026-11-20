@@ -114,9 +114,18 @@ export function App() {
         (liveData.agreements || []).forEach((liveAg: any) => {
           const idx = mergedAgreements.findIndex(a => a.id === liveAg.id || a.signingToken === liveAg.signingToken);
           if (idx >= 0) {
-            if (liveAg.tenantSignature || liveAg.status === 'completed') {
-              mergedAgreements[idx] = liveAg;
-            }
+            mergedAgreements[idx] = {
+              ...mergedAgreements[idx],
+              ...liveAg,
+              signedPdfBase64: liveAg.signedPdfBase64 || mergedAgreements[idx].signedPdfBase64,
+              tenantSignature: liveAg.tenantSignature || mergedAgreements[idx].tenantSignature,
+              tenantSignedAt: liveAg.tenantSignedAt || mergedAgreements[idx].tenantSignedAt,
+              ownerSignature: liveAg.ownerSignature || mergedAgreements[idx].ownerSignature,
+              ownerSignedAt: liveAg.ownerSignedAt || mergedAgreements[idx].ownerSignedAt,
+              status: (liveAg.status === 'completed' || liveAg.tenantSignature || mergedAgreements[idx].tenantSignature)
+                ? 'completed'
+                : (liveAg.status || mergedAgreements[idx].status)
+            };
           } else {
             mergedAgreements.push(liveAg);
           }
